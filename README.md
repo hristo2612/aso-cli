@@ -20,7 +20,7 @@ curl -fsSL https://raw.githubusercontent.com/hristo2612/aso-cli/main/install.sh 
 Or step by step (Node.js 22.13+):
 
 ```bash
-npm i -g asocli                    # the `aso` command
+npm i -g @hristo2612/aso-cli                    # the `aso` command
 npx skills add hristo2612/aso-cli  # optional: agent skills
 aso setup                          # Apple ID → Keychain, your app, sign in
 ```

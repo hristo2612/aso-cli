@@ -1,5 +1,5 @@
 {
-  "name": "asocli",
+  "name": "@hristo2612/aso-cli",
   "version": "0.1.0",
   "description": "Free, local-first App Store Optimization CLI + agent skills. Keyword popularity, difficulty, ranks and history in SQLite.",
   "type": "module",
