@@ -54,6 +54,12 @@ Give your agent the ASO skills:
 npx skills add hristo2612/aso-cli
 ```
 
+New to all this? The guided installer checks Node.js (and offers to install it), installs the CLI, adds the skills to your agents and walks you through setup:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/hristo2612/aso-cli/main/install.sh | bash
+```
+
 <details>
 <summary>Other ways to install</summary>
 
@@ -63,11 +69,7 @@ From the npm registry (same package, published as <code>aso-kit</code>):
 npm i -g aso-kit
 ```
 
-One line that checks Node, installs the CLI and offers the skills:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/hristo2612/aso-cli/main/install.sh | bash
-```
+Unattended install (CI, scripts): `curl -fsSL https://raw.githubusercontent.com/hristo2612/aso-cli/main/install.sh | bash -s -- --yes --no-setup`
 
 </details>
 
