@@ -3,7 +3,7 @@ import { CliError } from '../config.js';
 import { storefront } from '../storefronts.js';
 
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15';
-const MAX_RESULTS = 200;
+const MAX_RESULTS = 250;
 
 async function get(url, { headers = {}, json = false, attempts = 3 } = {}) {
   let lastError;
@@ -111,33 +111,67 @@ export async function lookup(ids, country) {
   return out;
 }
 
-// Full ranked result list for a term: web-page order first (true ranking + subtitles),
-// then the deeper iTunes Search order. Details are merged by app id.
+// Apple's own ordered search results (the endpoint the App Store apps use): up to ~250 app ids in
+// true App Store order, with full details for the first few.
+export async function storeSearch(term, country) {
+  const { id } = sf(country);
+  const data = await get(
+    `https://search.itunes.apple.com/WebObjects/MZStore.woa/wa/search?clientApplication=Software&media=software&term=${encodeURIComponent(term)}`,
+    { json: true, headers: { 'User-Agent': 'AppStore/3.0 iOS/18.0 model/iPhone16,1', 'X-Apple-Store-Front': `${id}-1,29`, Accept: 'application/json' } }
+  );
+  const bubble = data?.pageData?.bubbles?.find((b) => b.name === 'software');
+  if (!bubble) return null;
+  const details = new Map();
+  for (const r of Object.values(data?.storePlatformData?.['native-search-lockup']?.results ?? {})) {
+    details.set(String(r.id), {
+      id: String(r.id), name: r.name ?? null, subtitle: r.subtitle ?? null, developer: r.artistName ?? null,
+      rating: r.userRating?.value ?? null, ratingCount: r.userRating?.ratingCount ?? null, releasedAt: r.releaseDate ?? null,
+    });
+  }
+  return { ids: bubble.results.filter((r) => r.entity === 'software').map((r) => String(r.id)), details };
+}
+
+// Full ranked result list for a term. Order comes from Apple's store search (true ranking, ~250 deep);
+// if that is unavailable, the App Store web page (top ~11) followed by the iTunes Search API.
+// Details for the top apps are merged from the web page (subtitles) and iTunes lookup (exact counts, dates).
 export async function searchResults(term, country, { limit = MAX_RESULTS } = {}) {
-  const [top, deep] = await Promise.all([
+  const [store, top] = await Promise.all([
+    storeSearch(term, country).catch(() => null),
     searchPage(term, country).catch(() => []),
-    itunesSearch(term, country),
   ]);
-  const byId = new Map(deep.map((a) => [a.id, a]));
-  const order = [...top.map((a) => a.id), ...deep.map((a) => a.id).filter((id) => !top.some((a) => a.id === id))];
-  const missing = top.filter((a) => !byId.has(a.id)).map((a) => a.id);
-  for (const a of await lookup(missing, country).catch(() => [])) byId.set(a.id, a);
+  let order;
+  let source;
+  const byId = new Map();
+  if (store?.ids.length) {
+    order = store.ids;
+    source = 'app-store';
+  } else {
+    const deep = await itunesSearch(term, country);
+    for (const a of deep) byId.set(a.id, a);
+    order = [...new Set([...top.map((a) => a.id), ...deep.map((a) => a.id)])];
+    source = 'itunes-search';
+  }
+  const wanted = order.slice(0, Math.min(limit, 20)).filter((id) => !byId.has(id));
+  for (const a of await lookup(wanted, country).catch(() => [])) byId.set(a.id, a);
   const apps = order.slice(0, limit).map((id, i) => {
     const web = top.find((a) => a.id === id) ?? {};
-    const it = byId.get(id) ?? {};
-    const { raw, ...details } = it;
+    const mz = store?.details.get(id) ?? {};
+    const { raw, ...rest } = byId.get(id) ?? {};
+    const it = { ...rest, raw };
+    const { raw: _raw, ...details } = it;
     return {
       rank: i + 1,
       ...details,
       id,
-      name: web.name ?? it.name ?? null,
-      subtitle: web.subtitle ?? null,
-      developer: it.developer ?? web.developer ?? null,
-      rating: it.rating ?? web.rating ?? null,
-      ratingCount: it.ratingCount ?? web.ratingCount ?? 0,
+      name: it.name ?? mz.name ?? web.name ?? null,
+      // Apps without a subtitle show their category there; that isn't metadata.
+      subtitle: [mz.subtitle, web.subtitle].find((t) => t && t !== it.genre && !(it.raw?.genres ?? []).includes(t)) ?? null,
+      developer: it.developer ?? mz.developer ?? web.developer ?? null,
+      rating: it.rating ?? mz.rating ?? web.rating ?? null,
+      ratingCount: it.ratingCount ?? mz.ratingCount ?? web.ratingCount ?? 0,
     };
   });
-  return { apps, appCount: order.length, topSource: top.length ? 'app-store-web' : 'itunes-search' };
+  return { apps, appCount: order.length, source };
 }
 
 // Rank of `appId` for a term, or null when outside the top results.

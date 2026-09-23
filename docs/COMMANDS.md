@@ -58,7 +58,7 @@ Key output fields for `aso keywords`:
 - `confidence` = `high` (10+ competing apps and real popularity), `medium`, or `low`.
 - `brand` = `true` when the term is another app's brand (all words are in the #1 app's developer name and it clearly owns the term). Don't target these.
 - `opportunity` = `popularity × (100 − difficulty) / 100`, a sort key, not a forecast.
-- `rank` = position in App Store search (top ~10 from the App Store web page, deeper from the iTunes Search API; `null` = not in the top 200).
+- `rank` = position in Apple's own App Store search order (about 250 deep, unpersonalized iPhone results; `null` = not in the top 250).
 
 ## Tracking & history (local SQLite at `~/.aso/aso.db`)
 

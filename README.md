@@ -127,7 +127,7 @@ Everything except popularity (search, ranks, difficulty, lint, history) works wi
 | `difficulty` | 0–100, higher is harder. Our ASOManiac model, calibrated against third-party difficulty scores (Pearson r 0.87): competition from the top 10 apps' ratings (55%), demand (10%), their average rating (35%). |
 | `brand` | `true` when the term is another app's brand name, like "spotify". Skip those. |
 | `opportunity` | `popularity × (100 − difficulty) / 100`: a sort key, not a forecast. |
-| `rank` | Your position in App Store search. The top ~10 come from the App Store web page, deeper positions from the iTunes Search API. `null` means not in the top 200. |
+| `rank` | Your position in App Store search, in Apple's own result order (the same list the App Store app shows, about 250 deep). `null` means not in the top 250. Unpersonalized US-English iPhone results. |
 
 All commands print JSON when piped (for agents) and tables in a terminal. See [docs/COMMANDS.md](docs/COMMANDS.md) for the full reference.
 

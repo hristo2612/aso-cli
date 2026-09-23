@@ -252,7 +252,7 @@ async function cmdKeywords(args, opts) {
     ['difficulty', 'diff', 4],
     ['opportunity', 'opp', 4],
     ['appCount', 'apps', 4],
-    ...(r.appId ? [[(i) => i.rank ?? '>200', 'rank', 5]] : []),
+    ...(r.appId ? [[(i) => i.rank ?? '>250', 'rank', 5]] : []),
     [(i) => (i.brand ? 'brand' : i.confidence), 'signal', 6],
     [(i) => i.topApps.slice(0, 3).map((a) => a.name).join(' · '), 'top apps', 56],
   ]) + (r.items.some((i) => i.popularityFloor) ? '\n* 5 = Apple floor (low or unknown volume)' : '')
@@ -340,7 +340,7 @@ async function cmdTrack(args, opts) {
     }
     const summary = results.flatMap((r) => r.items.map((i) => ({ appId: r.appId, country: r.country, keyword: i.keyword, rank: i.rank, popularity: i.popularity, difficulty: i.difficulty })));
     return print({ checked: summary.length, items: summary, warnings: [...new Set(results.flatMap((r) => r.warnings))] },
-      (o) => (o.items.length ? table(o.items, [['appId', 'app', 11], ['country', 'cc', 2], ['keyword', 'keyword', 36], [(i) => i.rank ?? '>200', 'rank', 5], ['popularity', 'pop', 4], ['difficulty', 'diff', 4]]) : 'nothing tracked, add with `aso track add <appId> "k1,k2"`'));
+      (o) => (o.items.length ? table(o.items, [['appId', 'app', 11], ['country', 'cc', 2], ['keyword', 'keyword', 36], [(i) => i.rank ?? '>250', 'rank', 5], ['popularity', 'pop', 4], ['difficulty', 'diff', 4]]) : 'nothing tracked, add with `aso track add <appId> "k1,k2"`'));
   }
   throw usage('aso track add|rm|list|run');
 }
@@ -351,7 +351,7 @@ async function cmdRanks(args, opts) {
   const country = countryOf(opts);
   const items = db.latestRanks(appId, country).map((r) => ({ ...r, change: delta(r.rank, r.previousRank) }));
   print({ appId, country, items }, (o) => (o.items.length
-    ? table(o.items, [['keyword', 'keyword', 36], [(r) => r.rank ?? (r.checkedAt ? '>200' : '–'), 'rank', 5], ['change', 'Δ', 5], ['popularity', 'pop', 4], ['difficulty', 'diff', 4], [(r) => r.checkedAt?.slice(0, 16).replace('T', ' '), 'checked', 16]])
+    ? table(o.items, [['keyword', 'keyword', 36], [(r) => r.rank ?? (r.checkedAt ? '>250' : '–'), 'rank', 5], ['change', 'Δ', 5], ['popularity', 'pop', 4], ['difficulty', 'diff', 4], [(r) => r.checkedAt?.slice(0, 16).replace('T', ' '), 'checked', 16]])
     : `no tracked keywords for ${appId} in ${country}. Run \`aso track add ${appId} "k1,k2"\` then \`aso track run\``));
 }
 
@@ -365,7 +365,7 @@ async function cmdHistory(args, opts) {
   print(out, (o) => {
     const byDay = new Map();
     for (const s of o.snapshots) byDay.set(s.observedAt.slice(0, 10), { day: s.observedAt.slice(0, 10), popularity: s.popularity, difficulty: s.difficulty });
-    for (const r of o.ranks) byDay.set(r.observedAt.slice(0, 10), { ...(byDay.get(r.observedAt.slice(0, 10)) ?? { day: r.observedAt.slice(0, 10) }), rank: r.rank ?? '>200' });
+    for (const r of o.ranks) byDay.set(r.observedAt.slice(0, 10), { ...(byDay.get(r.observedAt.slice(0, 10)) ?? { day: r.observedAt.slice(0, 10) }), rank: r.rank ?? '>250' });
     return table([...byDay.values()], [['day', 'date', 10], ['popularity', 'pop', 4], ['difficulty', 'diff', 4], ...(o.appId ? [['rank', 'rank', 5]] : [])]);
   });
 }
