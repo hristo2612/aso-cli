@@ -39,7 +39,14 @@ export async function withAppleAds(fn, { allowLogin = true } = {}) {
     reloggedIn = true;
     say(e.code === 'AUTH_REQUIRED' ? 'Apple Ads session expired, signing in again' : 'Apple Ads org has no linked apps, re-detecting');
     const { login } = await import('./login.js');
-    await login({ timeoutSec: 240 });
+    // Trusted browser profiles usually sign in without any prompt, so try invisibly first.
+    try {
+      await login({ headless: true, timeoutSec: 60 });
+    } catch (err) {
+      if (!['NEEDS_INTERACTION', 'LOGIN_TIMEOUT'].includes(err.code)) throw err;
+      say('Apple needs you for a moment, opening Chrome');
+      await login({ timeoutSec: 240 });
+    }
     return fn(requireSession());
   }
 }

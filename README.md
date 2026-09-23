@@ -104,7 +104,7 @@ That's all. `aso login` finds the Apple Ads org that can read popularity and the
 
 Everything except popularity (search, ranks, difficulty, lint, history) works without Apple Ads.
 
-**How sign-in works:** `aso login` opens your installed Chrome with a dedicated profile (`~/.aso/browser`). It fills your Apple ID from the Keychain and, on macOS, reads the verification code from the system "Apple Account Verification" prompt. That needs Accessibility permission for your terminal; otherwise you type the code yourself. Only the Apple Ads session cookies are saved, to `~/.aso/session.json` (mode 600). When the session expires, `aso` signs in again on its own (`aso config autoLogin false` turns that off). On Linux, set `ASO_APPLE_PASSWORD` instead of using the Keychain.
+**How sign-in works:** `aso login` opens your installed Chrome with a dedicated profile (`~/.aso/browser`). It fills your Apple ID from the Keychain and, on macOS, reads the verification code from the system "Apple Account Verification" prompt. That needs Accessibility permission for your terminal; otherwise you type the code yourself. Only the Apple Ads session cookies are saved, to `~/.aso/session.json` (mode 600). Apple Ads sessions last about an hour; when one expires, `aso` signs in again on its own, invisibly in the background, and only opens Chrome if Apple needs you (`aso config autoLogin false` turns this off). On Linux, set `ASO_APPLE_PASSWORD` instead of using the Keychain.
 
 ## If setup gets stuck
 

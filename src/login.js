@@ -194,7 +194,7 @@ export async function login({ manual = false, timeoutSec = 300, trust = true, he
     await page.goto(START_URL, { waitUntil: 'domcontentloaded', timeout: 45000 }).catch((e) => {
       throw new CliError('NETWORK_ERROR', `Could not open Apple Ads (${e.message.split('\n')[0]})`, { hint: 'Check your internet connection and retry' });
     });
-    say('browser open, signing in to Apple Ads');
+    say(headless ? 'signing in to Apple Ads in the background' : 'browser open, signing in to Apple Ads');
     const deadline = Date.now() + timeoutSec * 1000;
     let filled = false;
     let otpContext = null;
@@ -246,6 +246,7 @@ export async function login({ manual = false, timeoutSec = 300, trust = true, he
           }
         }
         if (!codeAnnounced && !otpEntered && (otpDone || !otpContext)) {
+          if (headless) throw new CliError('NEEDS_INTERACTION', 'Apple wants a two-factor code', { exitCode: 3 });
           codeAnnounced = true;
           say('enter the Apple two-factor code in the browser window');
           terminalCode = askCodeInTerminal();
