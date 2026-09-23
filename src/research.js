@@ -37,7 +37,7 @@ export async function withAppleAds(fn, { allowLogin = true } = {}) {
     const config = loadConfig();
     if (!config.autoLogin || !config.appleId || !(await getPassword(config.keychainService, config.appleId))) throw e;
     reloggedIn = true;
-    say('Apple Ads session expired — signing in again');
+    say('Apple Ads session expired, signing in again');
     const { login } = await import('./login.js');
     await login({ timeoutSec: 240 });
     return fn(requireSession());

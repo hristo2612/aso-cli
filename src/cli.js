@@ -7,7 +7,7 @@ import { storefront, listStorefronts } from './storefronts.js';
 
 const VERSION = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
 
-const HELP = `aso ${VERSION} — free, local App Store Optimization toolkit
+const HELP = `aso ${VERSION}: free, local App Store Optimization toolkit
 
 Setup
   aso setup                         first-run wizard (Apple ID → Keychain, your app, sign-in)
@@ -88,7 +88,7 @@ async function cmdSetup() {
   const ask = async (q, def) => (await rl.question(`${q}${def ? ` [${def}]` : ''}: `)).trim() || def || '';
   const config = loadConfig();
   try {
-    process.stderr.write(`\naso setup — free ASO toolkit. Everything stays on this machine (~/.aso).\n
+    process.stderr.write(`\naso setup: free ASO toolkit. Everything stays on this machine (~/.aso).\n
 Keyword popularity comes from Apple Ads. You need an Apple ID that can open https://app-ads.apple.com
 (sign up free at https://searchads.apple.com, link your App Store Connect account; no campaign or billing needed).
 Search, ranks, difficulty and history work without it.\n\n`);
@@ -99,13 +99,13 @@ Search, ranks, difficulty and history work without it.\n\n`);
     const appAnswer = await ask('Your app (App Store id or name)', appId);
     if (appAnswer && !/^\d+$/.test(appAnswer)) {
       const found = (await itunesSearch(appAnswer, country, 8));
-      found.forEach((a, i) => process.stderr.write(`  ${i + 1}) ${a.name} — ${a.developer} (${a.id})\n`));
+      found.forEach((a, i) => process.stderr.write(`  ${i + 1}) ${a.name} by ${a.developer} (${a.id})\n`));
       const pick = int(await ask('Pick a number', '1'), 1);
       appId = found[pick - 1]?.id ?? null;
     } else if (appAnswer) appId = appAnswer;
     let orgId = config.orgId;
     if (appleId) {
-      orgId = await ask('Apple Ads org id — only if your account has several orgs; it is the number in app-ads.apple.com/cm/app/<id>/… for the org that has your app (blank = default)', orgId) || null;
+      orgId = await ask('Apple Ads org id (only if your account has several orgs: the number in app-ads.apple.com/cm/app/<id>/… for the org that has your app; blank = default)', orgId) || null;
     }
     saveConfig({ country, appleId: appleId || null, appId: appId || null, orgId: orgId || null });
     process.stderr.write(`\nsaved ${PATHS.config}\n`);
@@ -157,10 +157,10 @@ async function cmdStatus() {
       await popularity(['photo'], config.country, { ...session, appId: config.appId });
       out.appleAds = 'ok';
     } catch (e) {
-      out.appleAds = e.code === 'AUTH_REQUIRED' ? 'expired — run `aso login`' : e.message;
+      out.appleAds = e.code === 'AUTH_REQUIRED' ? 'expired, run `aso login`' : e.message;
     }
-  } else if (!session) out.appleAds = 'no session — run `aso login`';
-  else out.appleAds = 'no app configured — run `aso config appId <id>`';
+  } else if (!session) out.appleAds = 'no session, run `aso login`';
+  else out.appleAds = 'no app configured, run `aso config appId <id>`';
   out.ready = out.appleAds === 'ok';
   print(out, (o) => [
     `aso ${o.version} (node ${o.node})  home ${o.home}`,
@@ -285,7 +285,7 @@ async function cmdTrack(args, opts) {
     }
     const summary = results.flatMap((r) => r.items.map((i) => ({ appId: r.appId, country: r.country, keyword: i.keyword, rank: i.rank, popularity: i.popularity, difficulty: i.difficulty })));
     return print({ checked: summary.length, items: summary, warnings: [...new Set(results.flatMap((r) => r.warnings))] },
-      (o) => (o.items.length ? table(o.items, [['appId', 'app', 11], ['country', 'cc', 2], ['keyword', 'keyword', 36], [(i) => i.rank ?? '>200', 'rank', 5], ['popularity', 'pop', 4], ['difficulty', 'diff', 4]]) : 'nothing tracked — add with `aso track add <appId> "k1,k2"`'));
+      (o) => (o.items.length ? table(o.items, [['appId', 'app', 11], ['country', 'cc', 2], ['keyword', 'keyword', 36], [(i) => i.rank ?? '>200', 'rank', 5], ['popularity', 'pop', 4], ['difficulty', 'diff', 4]]) : 'nothing tracked, add with `aso track add <appId> "k1,k2"`'));
   }
   throw usage('aso track add|rm|list|run');
 }
@@ -297,7 +297,7 @@ async function cmdRanks(args, opts) {
   const items = db.latestRanks(appId, country).map((r) => ({ ...r, change: delta(r.rank, r.previousRank) }));
   print({ appId, country, items }, (o) => (o.items.length
     ? table(o.items, [['keyword', 'keyword', 36], [(r) => r.rank ?? (r.checkedAt ? '>200' : '–'), 'rank', 5], ['change', 'Δ', 5], ['popularity', 'pop', 4], ['difficulty', 'diff', 4], [(r) => r.checkedAt?.slice(0, 16).replace('T', ' '), 'checked', 16]])
-    : `no tracked keywords for ${appId} in ${country} — \`aso track add ${appId} "k1,k2"\` then \`aso track run\``));
+    : `no tracked keywords for ${appId} in ${country}. Run \`aso track add ${appId} "k1,k2"\` then \`aso track run\``));
 }
 
 async function cmdHistory(args, opts) {

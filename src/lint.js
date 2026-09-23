@@ -81,7 +81,7 @@ export function lintMetadata({ title = '', subtitle = '', keywords = '', locale 
   const brands = [...new Set([...titleWords, ...subtitleWords, ...keywordWords].filter((w) => BRANDS.has(w)))];
   if (brands.length) add('warning', 'trademark-risk', `possible third-party trademarks (review rejection risk): ${brands.join(', ')}`);
 
-  if (/[,|]/.test(title) || (title.match(/[-–—:]/g) || []).length > 1) {
+  if (/[,|]/.test(title) || (title.match(/[-\u2013\u2014:]/g) || []).length > 1) {
     add('warning', 'natural-title', 'title looks like a keyword list; keep it readable: Brand + main keyword phrase', 'title');
   }
 

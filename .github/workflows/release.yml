@@ -1,5 +1,5 @@
 # Publishes to npm whenever package.json on main has a version that isn't on npm yet.
-# Auth: npm Trusted Publishing (OIDC) — no tokens or secrets.
+# Auth: npm Trusted Publishing (OIDC), no tokens or secrets.
 # To release: bump "version" in package.json (e.g. `npm version patch`) and push to main.
 name: Release
 on:

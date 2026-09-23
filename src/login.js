@@ -109,12 +109,12 @@ function sessionFrom(cookies) {
 export async function login({ manual = false, timeoutSec = 300, trust = true, headless = false } = {}) {
   const config = loadConfig();
   const password = manual ? null : await getPassword(config.keychainService, config.appleId);
-  if (!manual && !password) say('no saved Apple ID password (run `aso setup` to save one) — sign in manually in the browser');
+  if (!manual && !password) say('no saved Apple ID password (run `aso setup` to save one); sign in manually in the browser');
   const context = await launch(headless);
   try {
     const page = context.pages()[0] || await context.newPage();
     await page.goto(START_URL, { waitUntil: 'domcontentloaded', timeout: 45000 });
-    say('browser open — signing in to Apple Ads');
+    say('browser open, signing in to Apple Ads');
     const deadline = Date.now() + timeoutSec * 1000;
     let filled = false;
     let otpContext = null;

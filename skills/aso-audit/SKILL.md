@@ -19,7 +19,7 @@ Preflight: see the `aso` router skill.
 2. Additional storefronts to check? (locale coverage dimension needs this)
 3. 1–3 competitor app IDs for the ratings/rank comparison (ask, or derive via `aso-competitors`'s Step 1)
 
-## Step 1 — Gather data
+## Step 1: Gather data
 
 ```bash
 aso app <appId> --lang en-US
@@ -34,7 +34,7 @@ If the project has a fastlane `metadata/` tree with multiple locale folders, als
 aso lint --fastlane <metadata dir>
 ```
 
-## Step 2 — Grade five dimensions (A–F)
+## Step 2: Grade five dimensions (A–F)
 
 ### 1. Metadata utilization
 Driven directly by `aso lint`'s `score` and `issues[]`.
@@ -43,9 +43,9 @@ Driven directly by `aso lint`'s `score` and `issues[]`.
 |---|---|
 | A | Lint passes, score in top band, 0 issues |
 | B | Passes, 1 minor issue (e.g. a few chars unused) |
-| C | Passes with warnings — noticeable wasted characters or a weak subtitle |
+| C | Passes with warnings: noticeable wasted characters or a weak subtitle |
 | D | Fails lint, several issues |
-| F | Fails badly — empty/near-empty keywords field, duplicate words across fields |
+| F | Fails badly: empty/near-empty keywords field, duplicate words across fields |
 
 ### 2. Keyword coverage & ranks
 From `aso keywords --app`.
@@ -69,7 +69,7 @@ From `aso app` (your `rating`/`ratingCount`) vs the same for 1–3 competitors (
 | D | Rating clearly below competitors |
 | F | Very low rating or count relative to the category |
 
-Note ratings and ASO are independent signals — this dimension measures competitive standing, not ASO effort, but low authority caps how aggressive a keyword strategy can be (see the difficulty ceiling table in `aso-keyword-research`).
+Note ratings and ASO are independent signals: this dimension measures competitive standing, not ASO effort, but low authority caps how aggressive a keyword strategy can be (see the difficulty ceiling table in `aso-keyword-research`).
 
 ### 4. Localization coverage
 From `aso lint --fastlane` output across locale folders, or a manual locale-by-locale check if no fastlane project exists.
@@ -85,7 +85,7 @@ From `aso lint --fastlane` output across locale folders, or a manual locale-by-l
 See `aso-localization` for which locales a storefront indexes and how to fill them.
 
 ### 5. Conversion assets (qualitative)
-`aso` has no data for icon/screenshots/description quality — grade this qualitatively based on what the user shares or what's visible in `aso app`'s description field:
+`aso` has no data for icon/screenshots/description quality: grade this qualitatively based on what the user shares or what's visible in `aso app`'s description field:
 
 - Does the description open with a clear value statement (not a feature dump)?
 - Do screenshots (if reviewed) lead with benefit-led captions in a sensible order?
@@ -93,35 +93,35 @@ See `aso-localization` for which locales a storefront indexes and how to fill th
 
 Flag this dimension explicitly as qualitative/judgment-based, unlike the other four.
 
-## Step 3 — Overall grade
+## Step 3: Overall grade
 
 Weight roughly: metadata utilization 30%, keyword coverage 30%, ratings vs competitors 15%, localization 15%, conversion assets 10% (adjust down the qualitative weight if you have little to go on). Map A=4…F=0, weighted average, then back to a letter.
 
-## Step 4 — Prioritized action items
+## Step 4: Prioritized action items
 
 Sort by impact ÷ effort. Quick wins first (lint-flagged character waste, duplicate words), then keyword gaps (hand off to `aso-keyword-research`/`aso-competitors`), then locale expansion (hand off to `aso-localization`), then a re-audit date (4 weeks out).
 
-## Output — report card
+## Output: report card
 
 ```
-ASO AUDIT — AppName (123456789), US
+ASO AUDIT: AppName (123456789), US
 Overall: B (2.9/4.0)
 
   Metadata utilization:     C  (lint score 72/100, keywords field 72/100 chars)
   Keyword coverage & ranks: B  (ranked for 8/15 tracked terms, 3 in top 25)
-  Ratings vs competitors:   B  (4.6★/1.2k vs Ring 4.7★/48k — rating fine, authority far behind)
+  Ratings vs competitors:   B  (4.6★/1.2k vs Ring 4.7★/48k, rating fine, authority far behind)
   Localization coverage:    F  (only en-US filled)
-  Conversion assets:        B  (qualitative — description leads with a feature list, not a benefit)
+  Conversion assets:        B  (qualitative, description leads with a feature list, not a benefit)
 
 Priority 1 (quick wins): fill keywords field to 95+ chars per aso lint; dedupe "camera" across title/keywords.
-Priority 2: close 3 competitor keyword gaps (see aso-competitors) — projected +opportunity X.
-Priority 3: fill 3–5 additional indexed locales (see aso-localization) — biggest single lever, currently untouched.
+Priority 2: close 3 competitor keyword gaps (see aso-competitors), projected +opportunity X.
+Priority 3: fill 3–5 additional indexed locales (see aso-localization), biggest single lever, currently untouched.
 Re-audit in 4 weeks after changes settle.
 ```
 
 ## Red flags
 
 - Grading without running `aso lint` first.
-- Skipping localization coverage — usually the single biggest missed opportunity.
+- Skipping localization coverage: usually the single biggest missed opportunity.
 - Giving a grade with no number behind it.
-- Treating a good rating as proof ASO is fine — they're independent.
+- Treating a good rating as proof ASO is fine: they're independent.
