@@ -1,0 +1,41 @@
+{
+  "name": "asocli",
+  "version": "0.1.0",
+  "description": "Free, local-first App Store Optimization CLI + agent skills. Keyword popularity, difficulty, ranks and history in SQLite.",
+  "type": "module",
+  "bin": {
+    "aso": "bin/aso.js"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "skills/",
+    "docs/",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test --no-warnings test/*.test.js",
+    "lint": "node --check bin/aso.js && for f in src/*.js src/apple/*.js; do node --check $f || exit 1; done"
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "dependencies": {
+    "playwright-core": "^1.55.0"
+  },
+  "keywords": [
+    "aso",
+    "app-store-optimization",
+    "app-store",
+    "keywords",
+    "cli",
+    "agent-skills",
+    "apple-search-ads"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hristo2612/aso-cli.git"
+  },
+  "license": "MIT"
+}
