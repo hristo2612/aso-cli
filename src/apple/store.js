@@ -5,19 +5,46 @@ import { storefront } from '../storefronts.js';
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15';
 const MAX_RESULTS = 250;
 
+// Apple throttles bursts per host (the search endpoints first), so requests to each host are spaced
+// out. A 403 or 429 from these hosts means "slow down": back off and retry instead of failing.
+const HOST_INTERVAL_MS = { 'itunes.apple.com': 3000, 'store-search': 1500, 'search.itunes.apple.com': 600, 'apps.apple.com': 500 };
+const nextSlot = new Map();
+async function pace(host) {
+  const gap = HOST_INTERVAL_MS[host] ?? 300;
+  const at = Math.max(Date.now(), nextSlot.get(host) ?? 0);
+  nextSlot.set(host, at + gap);
+  if (at > Date.now()) await new Promise((r) => setTimeout(r, at - Date.now()));
+}
+
+const THROTTLE_BACKOFF_MS = [10000, 30000, 60000];
+
 async function get(url, { headers = {}, json = false, attempts = 3 } = {}) {
+  const { hostname: host, pathname } = new URL(url);
+  const lane = pathname.includes('MZStore.woa') ? 'store-search' : host;
   let lastError;
-  for (let i = 1; i <= attempts; i++) {
+  let throttled = 0;
+  for (let i = 1; i <= attempts + throttled; i++) {
+    await pace(lane);
     try {
       const res = await fetch(url, { headers: { 'User-Agent': UA, ...headers }, signal: AbortSignal.timeout(20000) });
       if (res.status === 404) return null;
       if (res.ok) return json ? res.json() : res.text();
       lastError = new Error(`HTTP ${res.status}`);
-      if (res.status < 500 && res.status !== 429) break;
+      if (res.status === 403 || res.status === 429) {
+        if (throttled >= THROTTLE_BACKOFF_MS.length) break;
+        await new Promise((r) => setTimeout(r, THROTTLE_BACKOFF_MS[throttled++]));
+        continue;
+      }
+      if (res.status < 500) break;
     } catch (e) {
       lastError = e;
     }
     await new Promise((r) => setTimeout(r, 500 * i * i));
+  }
+  if (/HTTP 40[39]|HTTP 429/.test(lastError?.message)) {
+    throw new CliError('APP_STORE_THROTTLED', `The App Store is rate limiting ${host} (${lastError.message})`, {
+      hint: 'Apple limits bursts of searches; wait 15-30 minutes, or search fewer keywords at a time',
+    });
   }
   const offline = /ENOTFOUND|ECONNREFUSED|EAI_AGAIN|ENETUNREACH|fetch failed/i.test(`${lastError?.cause?.code} ${lastError?.message}`);
   throw new CliError(offline ? 'NETWORK_ERROR' : 'APP_STORE_UNAVAILABLE',
@@ -144,17 +171,25 @@ export async function searchResults(term, country, { limit = MAX_RESULTS, platfo
   ]);
   let order;
   let source;
+  let complete = true;
   const byId = new Map();
   if (store?.ids.length) {
     order = store.ids;
     source = 'app-store';
   } else {
-    const deep = await itunesSearch(term, country, MAX_RESULTS, platform);
+    let deep = [];
+    try {
+      deep = await itunesSearch(term, country, MAX_RESULTS, platform);
+    } catch (e) {
+      if (!top.length) throw e;
+      complete = false; // only the web page's top ~11 are known
+    }
     for (const a of deep) byId.set(a.id, a);
     order = [...new Set([...top.map((a) => a.id), ...deep.map((a) => a.id)])];
-    source = mac ? 'mac-app-store-web+itunes-mac' : 'app-store-web+itunes-search';
+    source = complete ? (mac ? 'mac-app-store-web+itunes-mac' : 'app-store-web+itunes-search') : `${mac ? 'mac-' : ''}app-store-web-top-${top.length}`;
   }
-  const wanted = order.slice(0, Math.min(limit, 20)).filter((id) => !byId.has(id));
+  const known = (id) => byId.has(id) || store?.details.get(id)?.ratingCount != null || top.find((a) => a.id === id)?.ratingCount != null;
+  const wanted = order.slice(0, Math.min(limit, 10)).filter((id) => !known(id));
   for (const a of await lookup(wanted, country).catch(() => [])) byId.set(a.id, a);
   const apps = order.slice(0, limit).map((id, i) => {
     const web = top.find((a) => a.id === id) ?? {};
@@ -174,7 +209,7 @@ export async function searchResults(term, country, { limit = MAX_RESULTS, platfo
       ratingCount: it.ratingCount ?? mz.ratingCount ?? web.ratingCount ?? 0,
     };
   });
-  return { apps, appCount: order.length, source, platform: mac ? 'mac' : 'iphone' };
+  return { apps, appCount: complete ? order.length : null, depth: order.length, complete, source, platform: mac ? 'mac' : 'iphone' };
 }
 
 // Rank of `appId` for a term, or null when outside the top results.

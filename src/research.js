@@ -91,7 +91,7 @@ export async function analyzeKeywords(terms, { country, appId, platform = 'iphon
     }
     return true;
   });
-  const analyzed = await mapLimit(kept, 4, async (keyword) => {
+  const analyzed = await mapLimit(kept, 2, async (keyword) => {
     let results;
     let hintCount = 0;
     try {
@@ -104,15 +104,17 @@ export async function analyzeKeywords(terms, { country, appId, platform = 'iphon
       results = null;
     }
     const pop = pops.get(keyword) ?? null;
-    const diff = results ? difficulty(results.apps, { popularity: pop, hintCount }) : null;
+    const diff = results && results.apps.length >= 3 ? difficulty(results.apps, { popularity: pop, hintCount }) : null;
     const rank = results && appId ? rankOf(results, appId) : null;
+    // 'unknown' when the search failed or only a partial list came back and the app wasn't in it.
+    const rankStatus = !appId ? undefined : rank != null ? 'ranked' : results?.complete ? 'not_in_results' : 'unknown';
     const topApps = (results?.apps ?? []).slice(0, 5).map((a) => ({
       rank: a.rank, id: a.id, name: a.name, subtitle: a.subtitle, developer: a.developer,
       rating: a.rating, ratingCount: a.ratingCount, updatedAt: a.updatedAt, match: keywordMatch(keyword, a.name, a.subtitle),
     }));
     if (record && results) {
       recordKeyword({ keyword, country, platform, observedAt, popularity: pop, difficulty: diff, appCount: results.appCount, topApps });
-      if (appId) recordRank({ appId: String(appId), keyword, country, platform, observedAt, rank });
+      if (appId && rankStatus !== 'unknown') recordRank({ appId: String(appId), keyword, country, platform, observedAt, rank });
     }
     return {
       keyword,
@@ -123,7 +125,7 @@ export async function analyzeKeywords(terms, { country, appId, platform = 'iphon
       confidence: results ? confidence(results.appCount, pop) : 'low',
       brand: results ? isBrandKeyword(keyword, results.apps) : false,
       appCount: results?.appCount ?? null,
-      ...(appId ? { rank } : {}),
+      ...(appId ? { rank, rankStatus, rankDepth: results?.depth ?? null } : {}),
       topApps,
     };
   });

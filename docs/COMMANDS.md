@@ -58,6 +58,7 @@ Key output fields for `aso keywords`:
 - `confidence` = `high` (10+ competing apps and real popularity), `medium`, or `low`.
 - `brand` = `true` when the term is another app's brand (all words are in the #1 app's developer name and it clearly owns the term). Don't target these.
 - `opportunity` = `popularity × (100 − difficulty) / 100`, a sort key, not a forecast.
+- `rankStatus` = `ranked`, `not_in_results` (Apple returned its full list and your app isn't in it) or `unknown` (the search was throttled or incomplete; nothing is recorded for that day). `rankDepth` = how many results were checked.
 - `rank` = position in Apple's own App Store search order (about 250 deep, unpersonalized iPhone results; `null` = not in the top 250). With `-p mac`: the Mac App Store's exact order for the top ~12 (its web search page), then the iTunes Search API's Mac results, which are close to but not exactly the store order. Popularity is Apple Ads data and is the same for both platforms.
 
 ## Tracking & history (local SQLite at `~/.aso/aso.db`)
@@ -95,6 +96,7 @@ Every error has a stable `code`, a `message` and usually a `hint` with the fix.
 | `LOGIN_TIMEOUT` / `BROWSER_CLOSED` | Sign-in didn't finish | `aso login` again (`--timeout 600` for more time) |
 | `NO_BROWSER` | Chrome not found | Install Google Chrome or run `npx playwright install chromium` |
 | `APPLE_ADS_RATE_LIMITED` | Too many popularity requests | Wait a few minutes; popularity is cached for 24h |
+| `APP_STORE_THROTTLED` | Apple is limiting App Store searches from your network | Wait 15-30 minutes; `aso` already paces and retries |
 | `NETWORK_ERROR` / `APP_STORE_UNAVAILABLE` | Offline, or Apple isn't answering | Check the connection and retry |
 | `APP_NOT_FOUND` | No app with that id in that country | Use the number after `/id` in the App Store URL, or another `-c` |
 | `BAD_COUNTRY` | Unknown storefront code | `aso storefronts` |

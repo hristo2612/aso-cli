@@ -260,7 +260,7 @@ async function cmdKeywords(args, opts) {
     ['difficulty', 'diff', 4],
     ['opportunity', 'opp', 4],
     ['appCount', 'apps', 4],
-    ...(r.appId ? [[(i) => i.rank ?? '>250', 'rank', 5]] : []),
+    ...(r.appId ? [[(i) => i.rank ?? (i.rankStatus === 'unknown' ? '?' : '>250'), 'rank', 5]] : []),
     [(i) => (i.brand ? 'brand' : i.confidence), 'signal', 6],
     [(i) => i.topApps.slice(0, 3).map((a) => a.name).join(' · '), 'top apps', 56],
   ]) + (r.items.some((i) => i.popularityFloor) ? '\n* 5 = Apple floor (low or unknown volume)' : '')
