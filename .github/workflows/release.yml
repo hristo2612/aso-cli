@@ -1,0 +1,41 @@
+# Publishes to npm whenever package.json on main has a version that isn't on npm yet.
+# Auth: npm Trusted Publishing (OIDC) — no tokens or secrets.
+# To release: bump "version" in package.json (e.g. `npm version patch`) and push to main.
+name: Release
+on:
+  push:
+    branches: [main]
+    paths: [package.json]
+  workflow_dispatch:
+permissions:
+  contents: write
+  id-token: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - name: Check whether this version is already published
+        id: check
+        run: |
+          NAME=$(node -p "require('./package.json').name")
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if npm view "$NAME@$VERSION" version >/dev/null 2>&1; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"; echo "$NAME@$VERSION already on npm"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.check.outputs.publish == 'true'
+        run: npm ci && npm test
+      - if: steps.check.outputs.publish == 'true'
+        run: npm install -g npm@latest && npm publish --provenance --access public
+      - if: steps.check.outputs.publish == 'true'
+        name: Tag and create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "v${{ steps.check.outputs.version }}" --target "$GITHUB_SHA" --generate-notes

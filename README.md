@@ -99,4 +99,6 @@ node bin/aso.js --help
 ASO_HOME=/tmp/aso-dev node bin/aso.js status   # isolated config/db
 ```
 
+Releasing: bump `version` in `package.json` (`npm version patch`) and push to `main`. GitHub Actions publishes to npm via trusted publishing and creates the GitHub release.
+
 No build step: plain Node ESM, SQLite via the built-in `node:sqlite`, and one dependency (`playwright-core`, used only for sign-in).
