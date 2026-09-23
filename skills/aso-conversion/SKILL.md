@@ -1,6 +1,6 @@
 ---
 name: aso-conversion
-description: Use to improve App Store conversion assets, icon, screenshots, preview video, Custom Product Pages, Product Page Optimization, or In-App Events, for an iOS app. Triggers on "improve my screenshots", "app icon feedback", "conversion rate", "custom product pages", "product page optimization", "in-app events", "why isn't my listing converting". Qualitative playbook, not keyword ranking, see aso-keyword-research and aso-metadata for that.
+description: Use to improve App Store conversion assets, the icon, screenshots, preview video, Custom Product Pages, Product Page Optimization, or In-App Events, for an iOS app once people are already finding the listing. Trigger on "improve my screenshots", "app icon feedback", "conversion rate", "custom product pages", "product page optimization", "in-app events", or "why isn't my listing converting even though it ranks fine". Qualitative playbook plus whatever `aso app`/`aso search` can show about the current listing and competitors; it is not about keyword ranking, see `aso-keyword-research` and `aso-metadata` for that.
 ---
 
 # ASO Conversion Optimization
@@ -11,7 +11,7 @@ Preflight: see the `aso` router skill.
 
 ## Iron law
 
-**Conversion assets are not indexed for search.** Icon, screenshots, preview video, and Custom Product Page content don't help ranking. Never claim screenshot captions or icon text are search-indexed; treat every recommendation here as a conversion lever only.
+**Conversion assets carry no searchable text.** Icon, screenshots, preview video, and Custom Product Page content don't get indexed, so never claim screenshot captions or icon text rank for keywords; treat every recommendation here as a conversion lever only. Conversion rate and ratings are widely believed to feed back into ranking indirectly over time (see `aso`), which is why this work still matters for ASO, just not through indexing.
 
 ## What the CLI can tell you
 

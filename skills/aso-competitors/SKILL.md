@@ -1,6 +1,6 @@
 ---
 name: aso-competitors
-description: Use to analyze App Store competitors, compare listings, or find keyword gaps with the `aso` CLI. Triggers on "who are my competitors?", "compare my app to X", "what keywords do my competitors use?", "keyword gap analysis". Finds competitors via `aso search`, pulls their listings with `aso app`, and diffs keyword coverage against your app.
+description: Use to analyze specific App Store competitors, compare listings side by side, or find keyword gaps between your app and named rival apps with the `aso` CLI. Trigger on "who are my competitors", "compare my app to X", "what keywords does Ring or Headspace rank for that I don't", or "keyword gap analysis", even if the user only names one competitor. Finds competitors via `aso search`, pulls their listings with `aso app`, and diffs keyword coverage against your app into quick-win, defend, battleground, aspirational, and ignore buckets. Not for general keyword brainstorming with no specific competitor in view, use `aso-keyword-research` for that.
 ---
 
 # ASO Competitor Analysis
@@ -22,7 +22,7 @@ aso search "<core keyword>" --limit 20 -c US
 aso keywords "<core keyword>" --app <yourAppId> -c US   # topApps in the result are candidate competitors
 ```
 
-Pick 2–3 competitors that are: similar in function (not just category), comparable in scale (comparing a 100-review app to a 500k-review one is noise), and actively maintained.
+Pick 2-3 competitors that are: similar in function (not just category), comparable in scale (comparing a 100-review app to a 500k-review one is noise), and actively maintained.
 
 ## Step 2: Pull their listings
 
@@ -91,5 +91,5 @@ Diff against the last pull for: title/subtitle/description text changes (a compe
 
 - **Never suggest adding a competitor's brand name as a keyword.** It risks App Review rejection and gains nothing Apple's algorithm rewards. `aso lint` flags competitor-brand risk: trust it.
 - Don't chase difficulty far above what the app's ratings count can realistically win (see `aso-keyword-research`'s ceiling table) just because a competitor ranks there.
-- 2–3 competitors give a cleaner signal than a long list: more just adds noise.
-- Re-run the full gap analysis after shipping quick-win keywords (2–4 weeks later, via `aso-tracking`) to confirm the gap actually closed.
+- 2-3 competitors give a cleaner signal than a long list: more just adds noise.
+- Re-run the full gap analysis after shipping quick-win keywords (2-4 weeks later, via `aso-tracking`) to confirm the gap actually closed.

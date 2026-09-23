@@ -1,6 +1,6 @@
 ---
 name: aso-localization
-description: Use to pick new App Store markets, research keywords per country, or exploit cross-locale keyword indexing with the `aso` CLI. Triggers on "localize my app", "target new markets", "international ASO", "which locales should I fill?", "how does cross-locale indexing work?". Uses `aso storefronts` and `-c <country>` for native per-market research, and `aso lint --fastlane` to validate every locale at once.
+description: Use to pick new App Store markets, research keywords natively per country, or exploit cross-locale keyword indexing with the `aso` CLI, the single most under-used ASO lever for most apps. Trigger on "localize my app", "target new markets", "international ASO", "which locales should I fill", "translate my keywords", or "how does cross-locale indexing work". Uses `aso storefronts` and the per-country `-c` flag for native market research plus `aso lint --fastlane` to validate every locale at once, and warns against ever just translating one locale's keywords into another instead of researching them fresh.
 ---
 
 # ASO Localization
@@ -53,7 +53,7 @@ Across **different** storefronts (US vs GB as separate stores), duplication is f
 
 ## Step 4: Assemble and validate every locale at once
 
-Draft title/subtitle/keywords per locale following `aso-metadata`'s per-field rules (natural title, benefit subtitle, packed keywords field, no cross-field repeats). Remember the keywords field's limit is **100 bytes, not characters**: for CJK locales (ja, zh-Hans, zh-Hant) and Arabic, each character costs 2–3 bytes, so those locales genuinely fit fewer tokens than en-US does for the same field. Don't count characters and assume the budget matches; check `aso lint`'s byte count for that locale. Then validate the whole fastlane metadata tree in one pass:
+Draft title/subtitle/keywords per locale following `aso-metadata`'s per-field rules (natural title, benefit subtitle, packed keywords field, no cross-field repeats). CJK and Arabic locales fit fewer keyword-field tokens than en-US for the same 100-byte limit (see `aso` for why); check `aso lint`'s byte count for that locale rather than counting characters. Then validate the whole fastlane metadata tree in one pass:
 
 ```bash
 aso lint --fastlane <metadata dir>
@@ -75,10 +75,10 @@ Repeat per changed field per locale so `aso-tracking` can later attribute rank m
 
 Seasonal pushes (holiday, back-to-school, a sale) need lead time and a plan to revert, they're not a permanent rewrite:
 
-- **Creative** (screenshots, icon variants, preview video): plan 4–6 weeks lead time to design and get through App Review.
-- **Localization QA** on any seasonal text change: 2–3 weeks lead time to check translations read naturally and lint clean across every locale.
+- **Creative** (screenshots, icon variants, preview video): plan 4-6 weeks lead time to design and get through App Review.
+- **Localization QA** on any seasonal text change: 2-3 weeks lead time to check translations read naturally and lint clean across every locale.
 - **Promotional text is the safest seasonal lever**: not indexed, editable anytime with no new build, so put the timely message there first (see `aso-metadata`).
-- **Keywords field seasonal swaps**: touch only 2–4 of the weakest evergreen terms, not a wholesale rewrite. Log the swap (`aso log add`), then **revert after the peak** unless the swapped terms are measurably outperforming what they replaced.
+- **Keywords field seasonal swaps**: touch only 2-4 of the weakest evergreen terms, not a wholesale rewrite. Log the swap (`aso log add`), then **revert after the peak** unless the swapped terms are measurably outperforming what they replaced.
 
 ## Output
 

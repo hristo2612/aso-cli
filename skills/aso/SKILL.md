@@ -1,6 +1,6 @@
 ---
 name: aso
-description: Entry point for App Store Optimization (ASO) work on an iOS/macOS app using the `aso` CLI. Use for anything ASO-related, keyword research, title/subtitle/keywords optimization, competitor analysis, listing audits, rank tracking, or localization. Triggers on "ASO", "App Store Optimization", "optimize my app store listing", "app store keywords", "why isn't my app ranking", "help with my App Store presence". Checks the CLI is installed and logged in, explains how Apple indexes search, then routes to the right specialized skill (aso-keyword-research, aso-metadata, aso-competitors, aso-audit, aso-tracking, aso-localization, aso-conversion).
+description: Entry point and router for App Store Optimization (ASO) work on an iOS/macOS app using the `aso` CLI. Start here whenever a request is broad or ambiguous, such as "improve my ASO", "help with my App Store listing", "why isn't my app ranking", "do a full ASO pass", or just "ASO for my app", even if the user doesn't name a specific task. Checks the CLI is installed and signed in, explains Apple's search-indexing rules that every other ASO skill assumes you already know, then routes to the right specialized skill (aso-keyword-research, aso-metadata, aso-competitors, aso-audit, aso-tracking, aso-localization, aso-conversion). Skip straight to one of those instead when the request already names a specific job, like "write my subtitle" or "find my competitors".
 ---
 
 # ASO Router
@@ -40,13 +40,16 @@ aso status
 - **Never repeat a word across fields.** A word already indexed via the title gains nothing by also appearing in the subtitle or keywords field: it only burns a character budget that could hold a new term.
 - Plurals are mostly redundant: Apple stems automatically, so "camera" already covers most "cameras" searches. Prefer the singular unless the plural has genuinely different search intent (e.g. "glass" vs "glasses").
 - The keywords field is comma-separated with **no spaces after commas**: every space is a wasted character.
-- Category and developer name are also indexed signals, not just the three text fields.
+- **The description is NOT indexed for search on iOS.** Apple's algorithm ignores it for ranking; treat it purely as a conversion/readability lever, not a keyword-placement opportunity (see `aso-conversion`).
+- Developer name and in-app purchase display names are also indexed text, on top of the three per-locale fields above.
+- Category placement affects relevance and category-chart ranking, not just discovery structure: pick the category your target keywords actually belong to, don't chase a bigger but less relevant one.
 - **Cross-locale indexing**: a storefront indexes more than its "native" locale. The US store, for example, also indexes locales like es-MX, fr-CA, pt-BR, zh-Hans/Hant, ja and the other English variants. Filling extra locales you're entitled to multiplies your effective keyword budget for that storefront. See `aso-localization`.
+- Ratings, reviews, and conversion rate aren't indexed text either, but they're widely believed to feed back into ranking indirectly (an app that converts and retains better tends to rank better over time), separate from the direct textual indexing above. See `aso-audit` and `aso-conversion`.
 
 ## Data caveats
 
-- **Popularity floor**: Apple's Search Ads popularity score (5–100) floors low/unknown-volume keywords at **5**. `aso keywords` flags this as `popularityFloor: true`. Treat a floored `5` as "no reliable signal", not "dead keyword", it can still be a real long-tail term.
-- **Difficulty is our own calibrated model**, not an Apple number: competition from the top-10 ranking apps' ratings counts for 55%, demand from popularity plus autocomplete signal for 10%, and market quality from the top-10 apps' average rating for 35%. Scored 0-100, higher is harder. Use it to compare keywords relative to each other and to the app's own authority, not as an absolute probability of ranking.
+- **Popularity floor**: Apple's Search Ads popularity score (5-100) floors low/unknown-volume keywords at **5**. `aso keywords` flags this as `popularityFloor: true`. Treat a floored `5` as "no reliable signal", not "dead keyword", it can still be a real long-tail term.
+- **Difficulty is the ASOManiac model**, not an Apple number: calibrated against third-party difficulty scores, it weighs competition from the top-10 ranking apps' ratings counts (55%), demand from popularity plus autocomplete signal (10%), and market quality from the top-10 apps' average rating (35%). Scored 0-100, higher is harder. Use it to compare keywords relative to each other and to the app's own authority, not as an absolute probability of ranking.
 - **`opportunity`** = `popularity × (100 − difficulty) / 100`. It's a sort key for prioritizing candidates, not a traffic forecast.
 - **`rank`** mixes sources: top ~10 comes from the App Store web search page, deeper positions from the iTunes Search API. `null` means not found in the top ~200, not necessarily "unranked forever."
 - Each `aso keywords` item also carries `brand` (true when the term is essentially the #1 ranking app's own publisher/brand name, someone else's brand: don't shortlist it) and `confidence` (`high`/`medium`/`low`, how much to trust that term's popularity/difficulty numbers). `--min-popularity <n>` and `--max-difficulty <n>` pre-filter a batch; filtered terms come back under `filteredOut` with a reason, worth a glance before assuming they're all noise.

@@ -1,6 +1,6 @@
 ---
 name: aso-tracking
-description: Use to set up or review App Store rank tracking over time with the `aso` CLI. Triggers on "track my keyword rankings", "set up rank tracking", "did that metadata change help?", "how are my rankings trending", "set up a cron job for ASO". Covers `aso track add/run/list`, `aso ranks`, `aso history`, and `aso log list` to evaluate whether a shipped metadata change worked.
+description: Use to set up, run, or review App Store keyword rank tracking over time with the `aso` CLI, especially to answer "did that metadata change actually help". Trigger on "track my keyword rankings", "set up rank tracking", "how are my rankings trending", "set up a cron job for ASO", or "check if my last update improved rank". Covers `aso track add`, `aso track run`, `aso track list`, `aso ranks`, `aso history`, and `aso log list`, plus the discipline of changing one field at a time and waiting 7 to 14 days before judging a result.
 ---
 
 # ASO Rank Tracking
@@ -49,7 +49,7 @@ Time series of popularity, difficulty, and rank for one keyword. Use this whenev
 
 ## Step 5: Evaluate a shipped change
 
-Every metadata change should already be logged (see `aso-metadata`'s Step 7):
+Every metadata change should already be logged (see `aso-metadata`'s Step 8):
 
 ```bash
 aso log list --app <appId>
@@ -74,7 +74,7 @@ RANK REVIEW: AppName (123456789), US, changes from 2026-09-01
 
 Logged change: keywords field, en-US, 2026-09-01, added "baby cam, nanny cam"
   baby cam:  rank 34 → 19  (14 days)   IMPROVED
-  nanny cam: rank,  → 41  (14 days)   IMPROVED (new entry)
+  nanny cam: rank -  → 41  (14 days)   IMPROVED (new entry)
   camera (control, untouched): rank 45 → 44   flat, supports attribution to the change
 
 Verdict: keep the change. Next: consider promoting "baby cam" to the subtitle.

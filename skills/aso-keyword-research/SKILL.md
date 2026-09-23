@@ -1,6 +1,6 @@
 ---
 name: aso-keyword-research
-description: Use to find, discover, brainstorm, or expand App Store keywords for an iOS/macOS app with the `aso` CLI. Triggers on "what keywords should I target?", "help me find keywords", "keyword research for my app", "long-tail keywords for a new app". Produces a ranked, scored keyword shortlist and a recommended token set, not a metadata draft (see aso-metadata for that).
+description: Use to find, discover, brainstorm, or expand candidate App Store keywords for an iOS/macOS app before writing metadata, backed by real `aso keywords`/`aso suggest` data rather than guessing. Trigger on "what keywords should I target", "help me find keywords", "keyword research for my app", "long-tail keywords for a new app", or "what should my next update focus on for search". Produces a ranked, scored keyword shortlist with tiers (primary, secondary, long-tail, defensive, competitor-gap) and a recommended token set, not a finished metadata draft, hand that to `aso-metadata`.
 ---
 
 # ASO Keyword Research
@@ -15,7 +15,7 @@ Preflight: see the `aso` router skill (CLI installed, session status). Popularit
 
 ## Step 1: Seed keywords
 
-Brainstorm 10–20 seeds across categories, not just the obvious core term:
+Brainstorm 10-20 seeds across categories, not just the obvious core term:
 
 | Category | Example (a security-camera app) |
 |---|---|
@@ -31,7 +31,7 @@ Brainstorm 10–20 seeds across categories, not just the obvious core term:
 aso suggest "<seed>" --limit 50 -c US
 ```
 
-Returns Apple Ads recommendations (with popularity) plus App Store autocomplete ideas. Run this for your top 3–5 seeds; pool and dedupe the results.
+Returns Apple Ads recommendations (with popularity) plus App Store autocomplete ideas. Run this for your top 3-5 seeds; pool and dedupe the results.
 
 ## Step 3: Score in batches
 
@@ -43,7 +43,7 @@ Max 100 terms per call: chunk the pooled candidate list into batches of ≤100. 
 
 `--min-popularity <n>` and `--max-difficulty <n>` pre-filter the batch; terms cut this way show up under the response's `filteredOut` with a reason, skim them once in case a relevant term got cut for the wrong reason.
 
-Each result gives `popularity` (5–100, `5` = Apple's floor, flagged `popularityFloor`), `difficulty` (0–100, our calibrated model: 55% competition from top-10 ratings, 10% demand from popularity + autocomplete, 35% market quality from top-10 average rating), `opportunity = popularity × (100 − difficulty) / 100`, `appCount`, `topApps`, your `rank`, `brand` (true = someone else's brand term, exclude it), and `confidence` (`high`/`medium`/`low`, trust in that term's numbers). **Drop every `brand: true` term from the candidate pool immediately**, it isn't a keyword opportunity.
+Each result gives `popularity` (5-100, `5` = Apple's floor), `difficulty` (0-100, the ASOManiac model, see `aso` for what it weighs), `opportunity = popularity × (100 − difficulty) / 100`, `appCount`, `topApps`, your `rank`, `brand` (true = someone else's brand term, exclude it), and `confidence` (`high`/`medium`/`low`, trust in that term's numbers). **Drop every `brand: true` term from the candidate pool immediately**, it isn't a keyword opportunity.
 
 ## Step 4: Shortlist (relevance first, then opportunity)
 
@@ -65,8 +65,8 @@ An app with few ratings can't out-authority a competitor with 50k+ reviews on a 
 | App's rating count | Realistic difficulty ceiling | Focus |
 |---|---|---|
 | < 100 | ≤ 30 | Long-tail, multi-word phrases, low-competition niches |
-| 100–1,000 | ≤ 50 | Mix of long-tail + a few moderate battles |
-| 1,000–10,000 | ≤ 70 | Broader mid-competition terms, start contesting category leaders |
+| 100-1,000 | ≤ 50 | Mix of long-tail + a few moderate battles |
+| 1,000-10,000 | ≤ 70 | Broader mid-competition terms, start contesting category leaders |
 | 10,000+ | No hard ceiling | Compete on head terms, but still mind opportunity |
 
 Bias new/small apps toward **more, narrower** keywords (3+ word phrases) over fewer broad ones: you win by being unambiguously the best answer to a specific query before you can compete on a generic one.
@@ -99,6 +99,6 @@ Ranked table, sorted by opportunity, relevant-only:
 (`*` = popularity floor, treat as "no signal" not "dead")
 
 Close with:
-1. **Top 10–15 by opportunity**: the candidate pool.
-2. **Recommended token set**: which terms are strong enough for title (1–2), subtitle (2–4), and keywords field (remaining, packed toward 100 chars), token-level, not a finished draft. Hand off to `aso-metadata` to actually assemble and lint the fields.
+1. **Top 10-15 by opportunity**: the candidate pool.
+2. **Recommended token set**: which terms are strong enough for title (1-2), subtitle (2-4), and keywords field (remaining, packed toward 100 chars), token-level, not a finished draft. Hand off to `aso-metadata` to actually assemble and lint the fields.
 3. **Watchlist**: relevant but currently too competitive for this app's authority, revisit after ratings grow.

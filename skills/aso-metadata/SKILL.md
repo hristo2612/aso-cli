@@ -1,6 +1,6 @@
 ---
 name: aso-metadata
-description: Use to write or optimize App Store metadata, title, subtitle, or keywords field, for one locale with the `aso` CLI. Triggers on "optimize my metadata", "write my app title", "improve my keywords field", "my app isn't ranking", "rewrite my subtitle". Builds a token budget, drafts 2-3 options, validates every draft with `aso lint`, and logs the shipped change with `aso log add`. For finding candidate keywords first, see aso-keyword-research.
+description: Use to write, rewrite, or optimize App Store metadata, the title, subtitle, or keywords field, for one locale with the `aso` CLI, once you already have or can quickly gather candidate keywords. Trigger on "optimize my metadata", "write my app title", "improve my keywords field", "my app isn't ranking so fix the listing text", "rewrite my subtitle", or "draft a keyword field". Builds a token budget across fields, drafts two to three options, validates every draft with `aso lint`, and logs the shipped change with `aso log add`. If there's no keyword shortlist yet, run `aso-keyword-research` first rather than inventing keywords here.
 ---
 
 # ASO Metadata Optimizer
@@ -23,13 +23,13 @@ Preflight: see the `aso` router skill.
 
 | Field | Limit | Rough token count | Role |
 |---|---|---|---|
-| Title | 30 chars | ~3–4 tokens | Ranking + first thing users read |
-| Subtitle | 30 chars | ~5–6 tokens | Ranking + sells the benefit |
-| Keywords field | 100 **bytes**, not characters | ~14–16 tokens for Latin scripts | Pure ranking, invisible to users |
+| Title | 30 chars | ~3-4 tokens | Ranking + first thing users read |
+| Subtitle | 30 chars | ~5-6 tokens | Ranking + sells the benefit |
+| Keywords field | 100 **bytes**, not characters | ~14-16 tokens for Latin scripts | Pure ranking, invisible to users |
 
-The keywords field limit is bytes, not characters: every ASCII character costs 1 byte, but CJK and Arabic characters cost 2–3 bytes each in UTF-8. For non-Latin locales, budget by byte count (`aso lint` reports it), not by how many characters visually seem to fit; expect noticeably fewer usable tokens than an English locale gets. See `aso-localization` for locale-by-locale handling.
+The keywords field limit is bytes, not characters (see `aso` for why non-Latin scripts cost more per byte); check `aso lint`'s byte count rather than eyeballing character count. See `aso-localization` for locale-by-locale handling.
 
-Total is roughly 22–26 unique tokens across the whole locale (fewer for non-Latin keyword fields). Every token must earn its place: it should form at least one compound phrase (with another token in the same or a different field) that has real popularity and a realistic ranking path for this app (see the difficulty ceiling table in `aso-keyword-research`).
+Total is roughly 22-26 unique tokens across the whole locale (fewer for non-Latin keyword fields). Every token must earn its place: it should form at least one compound phrase (with another token in the same or a different field) that has real popularity and a realistic ranking path for this app (see the difficulty ceiling table in `aso-keyword-research`).
 
 ## Step 3: Build the compound-phrase matrix
 
@@ -49,13 +49,13 @@ aso keywords "security camera" "home security" "baby cam" "home monitor" "motion
 
 Keep tokens whose phrases clear the bar; drop tokens that only form low-opportunity or irrelevant phrases. Sum the phrases' `opportunity` as your rough score to maximize per draft. Skip any candidate flagged `brand: true`, that's someone else's brand term, not a real ranking opportunity.
 
-## Step 4: Draft 2–3 full options
+## Step 4: Draft 2-3 full options
 
 For each draft:
 
 - **Title**: `Brand - Natural Phrase` (or just the brand for very well-known single-word brands). It must read as a real product name a human would say out loud, not a keyword string. Fold in your #1 phrase naturally.
 - **Subtitle**: a genuine benefit statement, not a second keyword dump, e.g. "Home Monitor & Baby Cam", not "Camera Security Monitor Home". Connectors (`&`, `+`, `-`, "and") are fine; Apple strips them for indexing but they make the phrase readable.
-- **Keywords field**: everything else, comma-separated, **no spaces after commas**, singular forms (Apple stems plurals automatically, "camera" already covers "cameras"), no stop words ("the", "and", "for"...), packed toward 95–100 of 100 chars. Never include competitor brand names or Apple trademarks (iPhone, FaceTime, etc.), App Review risk, not just a ranking non-issue.
+- **Keywords field**: everything else, comma-separated, **no spaces after commas**, singular forms (Apple stems plurals automatically, "camera" already covers "cameras"), no stop words ("the", "and", "for"...), packed toward 95-100 of 100 chars. Never include competitor brand names or Apple trademarks (iPhone, FaceTime, etc.), App Review risk, not just a ranking non-issue.
 
 ## Step 5: Validate every draft
 
@@ -76,7 +76,7 @@ Two more fields worth deliberate use, neither indexed for search, both purely fo
 
 ## Step 7: Screenshot captions (brief)
 
-Screenshot text is not confirmed to be part of Apple's search index: treat it purely as a **conversion** lever, not a keyword-placement opportunity. Never claim screenshot captions are search-indexed. Write captions that lead with user benefit ("See who's at your door from anywhere"), one idea each, under ~40 characters for thumbnail readability. Do not stuff keywords into captions on the theory that they're indexed. For full icon/screenshot/preview-video/Custom-Product-Page guidance, see `aso-conversion`.
+Apple has never confirmed that screenshot captions are read for search, so treat them as a **conversion** lever, not a keyword-placement opportunity. Don't tell users captions are indexed: that steers effort into image text instead of the fields that are known to rank. Write captions that lead with user benefit ("See who's at your door from anywhere"), one idea each, under ~40 characters for thumbnail readability. For full icon/screenshot/preview-video/Custom-Product-Page guidance, see `aso-conversion`.
 
 ## Step 8: Apply and log
 
