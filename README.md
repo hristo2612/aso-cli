@@ -1,39 +1,75 @@
-# aso-cli
+<p align="center">
+  <img src="https://raw.githubusercontent.com/hristo2612/aso-cli/main/assets/banner.webp" alt="ASO CLI" width="100%">
+</p>
 
-Free, local App Store Optimization for you and your AI agent.
+# ASO CLI 📈
 
-```bash
-npm i -g aso-kit && aso setup
-```
+<p align="center">
+  <a href="https://github.com/hristo2612/aso-cli#install">Install</a> | <a href="https://github.com/hristo2612/aso-cli/blob/main/docs/COMMANDS.md">Commands</a> | <a href="https://github.com/hristo2612/aso-cli#skills">Agent Skills</a>
+</p>
 
-[![npm](https://img.shields.io/npm/v/aso-kit)](https://www.npmjs.com/package/aso-kit) [![CI](https://github.com/hristo2612/aso-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/hristo2612/aso-cli/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+<p align="center">
+  <a href="https://github.com/hristo2612/aso-cli/blob/main/docs/COMMANDS.md"><img src="https://img.shields.io/badge/docs-commands-00e5e5?style=for-the-badge&labelColor=555" alt="Docs"></a>
+  <a href="https://www.npmjs.com/package/aso-kit"><img src="https://img.shields.io/npm/v/aso-kit?style=for-the-badge&label=npm&labelColor=555&color=cb3837" alt="npm"></a>
+  <a href="https://skills.sh"><img src="https://img.shields.io/badge/skills-skills.sh-7c3aed?style=for-the-badge&labelColor=555" alt="Skills"></a>
+  <a href="https://github.com/hristo2612/aso-cli/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-4c1?style=for-the-badge&labelColor=555" alt="License"></a>
+  <a href="https://github.com/hristo2612"><img src="https://img.shields.io/badge/built%20by-hristo2612-0a7ea4?style=for-the-badge&labelColor=555" alt="Built by"></a>
+</p>
+<p align="center">
+  <a href="https://github.com/hristo2612/aso-cli/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/hristo2612/aso-cli/ci.yml?branch=main&style=for-the-badge&label=ci&labelColor=555" alt="CI"></a>
+  <img src="https://img.shields.io/badge/node-22.13%2B-339933?style=for-the-badge&labelColor=555" alt="Node 22.13+">
+  <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux-111?style=for-the-badge&labelColor=555" alt="Platform">
+</p>
 
-- **Keyword research**: Apple Search Ads popularity, difficulty, opportunity, top competitors, and your rank, in one command.
-- **Ideas**: Apple Ads keyword recommendations plus App Store autocomplete.
-- **History**: every lookup lands in a local SQLite file (`~/.aso/aso.db`). Track ranks daily and see what moved.
-- **Metadata linter**: catches wasted characters, duplicate words, stop words and plurals before you ship.
-- **Automatic Apple sign-in**: uses your Apple ID from the macOS Keychain and reads the 2FA code from the macOS prompt, so your agent can refresh the session on its own.
-- **Agent skills**: 7 ASO playbooks (research, metadata, competitors, audit, tracking, localization) for Claude Code, Codex, Cursor and others.
+**Free App Store Optimization for you and your AI agent.** Real Apple Search Ads popularity, keyword difficulty, live App Store ranks, and a local history of all of it. Your agent signs in to Apple on its own (Keychain plus automatic 2FA), so it can research keywords, write metadata and track rankings while you build your app.
 
-No account, no server, no telemetry. MIT.
+No account, no server, no telemetry, no subscription. One install and `aso setup`.
+
+<table>
+  <tr><td><b>Real Apple data</b></td><td>Popularity straight from Apple Search Ads (with a re-check for terms Apple floors at 5), difficulty from the apps you'd have to beat, and your live rank in App Store search. 55+ storefronts.</td></tr>
+  <tr><td><b>Signs in by itself</b></td><td>Chrome plus your macOS Keychain plus the system 2FA prompt. Expired sessions refresh automatically, even mid-task.</td></tr>
+  <tr><td><b>Remembers everything</b></td><td>Every lookup lands in a local SQLite file. Rank tracking, keyword history, a metadata change log, and raw SQL when you want it.</td></tr>
+  <tr><td><b>Ships clean metadata</b></td><td><code>aso lint</code> catches duplicate words, wasted characters, stop words, plurals and trademark risks, for one locale or a whole fastlane metadata folder.</td></tr>
+  <tr><td><b>Built for agents</b></td><td>JSON when piped, stable exit codes, and 7 ASO skills for Claude Code, Codex, Cursor and more.</td></tr>
+  <tr><td><b>Small and free</b></td><td>MIT licensed, plain Node, one dependency, nothing leaves your machine except requests to Apple.</td></tr>
+</table>
 
 ## Install
 
 Needs Node.js 22.13+.
 
 ```bash
-npm i -g aso-kit                    # installs the `aso` command
-npx skills add hristo2612/aso-cli   # optional: the agent skills
-aso setup                           # Apple ID → Keychain, your app, sign in
+npm i -g hristo2612/aso-cli && aso setup
 ```
 
-Just want to try it? `npx aso-kit search "habit tracker"` runs without installing anything.
+Try it without installing:
 
-Prefer one line that does all of the above, including a Node check?
+```bash
+npx hristo2612/aso-cli search "habit tracker"
+```
+
+Give your agent the ASO skills:
+
+```bash
+npx skills add hristo2612/aso-cli
+```
+
+<details>
+<summary>Other ways to install</summary>
+
+From the npm registry (same package, published as <code>aso-kit</code>):
+
+```bash
+npm i -g aso-kit
+```
+
+One line that checks Node, installs the CLI and offers the skills:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/hristo2612/aso-cli/main/install.sh | bash
 ```
+
+</details>
 
 ## Quick start
 
