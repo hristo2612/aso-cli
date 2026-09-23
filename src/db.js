@@ -72,22 +72,40 @@ export function openDb(file = PATHS.db) {
   db = new DatabaseSync(file);
   db.exec('PRAGMA journal_mode = WAL;');
   db.exec(SCHEMA);
+  migrate(db);
   return db;
+}
+
+// v0.4: rankings and difficulty differ per platform (iPhone vs Mac); existing rows are iPhone.
+function migrate(conn) {
+  const cols = (t) => conn.prepare(`PRAGMA table_info(${t})`).all().map((c) => c.name);
+  for (const t of ['keyword_snapshots', 'ranks']) {
+    if (!cols(t).includes('platform')) conn.exec(`ALTER TABLE ${t} ADD COLUMN platform TEXT NOT NULL DEFAULT 'iphone'`);
+  }
+  if (!cols('tracked').includes('platform')) {
+    conn.exec(`BEGIN;
+      CREATE TABLE tracked_v2 (app_id TEXT NOT NULL, keyword TEXT NOT NULL, country TEXT NOT NULL,
+        platform TEXT NOT NULL DEFAULT 'iphone', added_at TEXT NOT NULL, PRIMARY KEY (app_id, keyword, country, platform));
+      INSERT INTO tracked_v2 (app_id, keyword, country, added_at) SELECT app_id, keyword, country, added_at FROM tracked;
+      DROP TABLE tracked;
+      ALTER TABLE tracked_v2 RENAME TO tracked;
+      COMMIT;`);
+  }
 }
 
 export const now = () => new Date().toISOString();
 
 export function recordKeyword(row) {
   openDb().prepare(
-    `INSERT INTO keyword_snapshots (keyword, country, observed_at, popularity, difficulty, app_count, top_apps)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO keyword_snapshots (keyword, country, observed_at, popularity, difficulty, app_count, top_apps, platform)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(row.keyword, row.country, row.observedAt, row.popularity, row.difficulty, row.appCount,
-    JSON.stringify(row.topApps ?? []));
+    JSON.stringify(row.topApps ?? []), row.platform ?? 'iphone');
 }
 
-export function recordRank({ appId, keyword, country, observedAt, rank }) {
-  openDb().prepare('INSERT INTO ranks (app_id, keyword, country, observed_at, rank) VALUES (?, ?, ?, ?, ?)')
-    .run(appId, keyword, country, observedAt, rank);
+export function recordRank({ appId, keyword, country, observedAt, rank, platform = 'iphone' }) {
+  openDb().prepare('INSERT INTO ranks (app_id, keyword, country, observed_at, rank, platform) VALUES (?, ?, ?, ?, ?, ?)')
+    .run(appId, keyword, country, observedAt, rank, platform);
 }
 
 export function recordApp(app, country) {
@@ -109,53 +127,53 @@ export function cachedPopularity(keyword, country, maxAgeHours = 24) {
   return row?.popularity ?? null;
 }
 
-export function trackAdd(appId, keywords, country) {
-  const stmt = openDb().prepare('INSERT OR IGNORE INTO tracked (app_id, keyword, country, added_at) VALUES (?, ?, ?, ?)');
+export function trackAdd(appId, keywords, country, platform = 'iphone') {
+  const stmt = openDb().prepare('INSERT OR IGNORE INTO tracked (app_id, keyword, country, platform, added_at) VALUES (?, ?, ?, ?, ?)');
   const t = now();
-  return keywords.filter((k) => stmt.run(appId, k, country, t).changes > 0);
+  return keywords.filter((k) => stmt.run(appId, k, country, platform, t).changes > 0);
 }
 
-export function trackRemove(appId, keywords, country) {
-  const stmt = openDb().prepare('DELETE FROM tracked WHERE app_id = ? AND keyword = ? AND country = ?');
-  return keywords.filter((k) => stmt.run(appId, k, country).changes > 0);
+export function trackRemove(appId, keywords, country, platform = 'iphone') {
+  const stmt = openDb().prepare('DELETE FROM tracked WHERE app_id = ? AND keyword = ? AND country = ? AND platform = ?');
+  return keywords.filter((k) => stmt.run(appId, k, country, platform).changes > 0);
 }
 
 export function trackList(appId) {
-  const sql = 'SELECT app_id AS appId, keyword, country, added_at AS addedAt FROM tracked';
+  const sql = 'SELECT app_id AS appId, keyword, country, platform, added_at AS addedAt FROM tracked';
   return appId
-    ? openDb().prepare(`${sql} WHERE app_id = ? ORDER BY country, keyword`).all(appId)
-    : openDb().prepare(`${sql} ORDER BY app_id, country, keyword`).all();
+    ? openDb().prepare(`${sql} WHERE app_id = ? ORDER BY platform, country, keyword`).all(appId)
+    : openDb().prepare(`${sql} ORDER BY app_id, platform, country, keyword`).all();
 }
 
 // Latest and previous rank per tracked keyword, joined with latest popularity/difficulty.
-export function latestRanks(appId, country) {
+export function latestRanks(appId, country, platform = 'iphone') {
   return openDb().prepare(`
     SELECT t.keyword,
-      (SELECT rank FROM ranks r WHERE r.app_id = t.app_id AND r.keyword = t.keyword AND r.country = t.country
+      (SELECT rank FROM ranks r WHERE r.app_id = t.app_id AND r.keyword = t.keyword AND r.country = t.country AND r.platform = t.platform
          ORDER BY observed_at DESC LIMIT 1) AS rank,
-      (SELECT rank FROM ranks r WHERE r.app_id = t.app_id AND r.keyword = t.keyword AND r.country = t.country
+      (SELECT rank FROM ranks r WHERE r.app_id = t.app_id AND r.keyword = t.keyword AND r.country = t.country AND r.platform = t.platform
          ORDER BY observed_at DESC LIMIT 1 OFFSET 1) AS previousRank,
-      (SELECT observed_at FROM ranks r WHERE r.app_id = t.app_id AND r.keyword = t.keyword AND r.country = t.country
+      (SELECT observed_at FROM ranks r WHERE r.app_id = t.app_id AND r.keyword = t.keyword AND r.country = t.country AND r.platform = t.platform
          ORDER BY observed_at DESC LIMIT 1) AS checkedAt,
       (SELECT popularity FROM keyword_snapshots k WHERE k.keyword = t.keyword AND k.country = t.country
          AND k.popularity IS NOT NULL ORDER BY observed_at DESC LIMIT 1) AS popularity,
       (SELECT difficulty FROM keyword_snapshots k WHERE k.keyword = t.keyword AND k.country = t.country
-         ORDER BY observed_at DESC LIMIT 1) AS difficulty
-    FROM tracked t WHERE t.app_id = ? AND t.country = ?
-    ORDER BY t.keyword`).all(appId, country);
+         AND k.platform = t.platform ORDER BY observed_at DESC LIMIT 1) AS difficulty
+    FROM tracked t WHERE t.app_id = ? AND t.country = ? AND t.platform = ?
+    ORDER BY t.keyword`).all(appId, country, platform);
 }
 
-export function keywordHistory(keyword, country, appId, days) {
+export function keywordHistory(keyword, country, appId, days, platform = 'iphone') {
   const since = new Date(Date.now() - days * 86400e3).toISOString();
   const snapshots = openDb().prepare(
     `SELECT observed_at AS observedAt, popularity, difficulty, app_count AS appCount
-     FROM keyword_snapshots WHERE keyword = ? AND country = ? AND observed_at >= ? ORDER BY observed_at`
-  ).all(keyword, country, since);
+     FROM keyword_snapshots WHERE keyword = ? AND country = ? AND platform = ? AND observed_at >= ? ORDER BY observed_at`
+  ).all(keyword, country, platform, since);
   const ranks = appId
     ? openDb().prepare(
       `SELECT observed_at AS observedAt, rank FROM ranks
-       WHERE app_id = ? AND keyword = ? AND country = ? AND observed_at >= ? ORDER BY observed_at`
-    ).all(appId, keyword, country, since)
+       WHERE app_id = ? AND keyword = ? AND country = ? AND platform = ? AND observed_at >= ? ORDER BY observed_at`
+    ).all(appId, keyword, country, platform, since)
     : [];
   return { snapshots, ranks };
 }

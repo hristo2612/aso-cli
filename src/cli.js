@@ -36,11 +36,12 @@ Metadata
   aso lint --fastlane ./fastlane/metadata
   aso storefronts
 
-Flags: -c/--country <CC>  --json  --table  --no-login  -h/--help  -v/--version
+Flags: -c/--country <CC>  -p/--platform iphone|mac  --json  --table  --no-login  -h/--help  -v/--version
 Docs: https://github.com/hristo2612/aso-cli`;
 
 const OPTIONS = {
   country: { type: 'string', short: 'c' },
+  platform: { type: 'string', short: 'p' },
   app: { type: 'string' },
   json: { type: 'boolean' },
   table: { type: 'boolean' },
@@ -74,6 +75,13 @@ function countryOf(opts) {
   const cc = (opts.country || loadConfig().country || 'US').toUpperCase();
   if (!storefront(cc)) throw new CliError('BAD_COUNTRY', `Unknown country "${cc}"`, { hint: 'Run `aso storefronts`', exitCode: 2 });
   return cc;
+}
+
+function platformOf(opts) {
+  const p = String(opts.platform || 'iphone').toLowerCase();
+  const map = { iphone: 'iphone', ios: 'iphone', mac: 'mac', macos: 'mac' };
+  if (!map[p]) throw usage(`Unknown platform "${opts.platform}" (use iphone or mac)`);
+  return map[p];
 }
 
 const appIdOf = (value) => {
@@ -243,7 +251,7 @@ async function cmdKeywords(args, opts) {
     return n;
   };
   const result = await analyzeKeywords(terms, {
-    country: countryOf(opts), appId, fresh: opts.fresh, allowLogin: opts.login,
+    country: countryOf(opts), platform: platformOf(opts), appId, fresh: opts.fresh, allowLogin: opts.login,
     minPopularity: num(opts['min-popularity'], 'min-popularity'), maxDifficulty: num(opts['max-difficulty'], 'max-difficulty'),
   });
   print(result, (r) => table(r.items, [
@@ -273,8 +281,8 @@ async function cmdSearch(args, opts) {
   if (!term) throw usage('Give a search term: aso search "habit tracker"');
   const { searchResults } = await import('./apple/store.js');
   const country = countryOf(opts);
-  const res = await searchResults(term, country, { limit: int(opts.limit, 20) });
-  const out = { term, country, appCount: res.appCount, apps: res.apps };
+  const res = await searchResults(term, country, { limit: int(opts.limit, 20), platform: platformOf(opts) });
+  const out = { term, country, platform: res.platform, source: res.source, appCount: res.appCount, apps: res.apps };
   print(out, (o) => table(o.apps, [
     ['rank', '#', 3], ['id', 'id', 11], ['name', 'name', 30], ['subtitle', 'subtitle', 30],
     [(a) => a.rating?.toFixed(1), '★', 3], ['ratingCount', 'ratings', 8], [(a) => a.updatedAt?.slice(0, 10), 'updated', 10],
@@ -313,32 +321,34 @@ async function cmdTrack(args, opts) {
     const appId = appIdOf(rest[0]);
     const terms = parseTerms(rest.slice(1));
     if (!terms.length) throw usage(`aso track ${sub} <appId> "k1,k2"`);
-    const changed = sub === 'add' ? db.trackAdd(appId, terms, country) : db.trackRemove(appId, terms, country);
-    return print({ appId, country, [sub === 'add' ? 'added' : 'removed']: changed, tracked: db.trackList(appId).length },
+    const platform = platformOf(opts);
+    const changed = sub === 'add' ? db.trackAdd(appId, terms, country, platform) : db.trackRemove(appId, terms, country, platform);
+    return print({ appId, country, platform, [sub === 'add' ? 'added' : 'removed']: changed, tracked: db.trackList(appId).length },
       (o) => `${sub === 'add' ? 'added' : 'removed'} ${changed.length} keyword(s); ${o.tracked} tracked for ${appId}`);
   }
   if (sub === 'list') {
     const rows = db.trackList(rest[0] ? appIdOf(rest[0]) : null);
-    return print({ items: rows }, (o) => table(o.items, [['appId', 'app', 11], ['country', 'cc', 2], ['keyword', 'keyword', 40], [(r) => r.addedAt.slice(0, 10), 'added', 10]]));
+    return print({ items: rows }, (o) => table(o.items, [['appId', 'app', 11], ['platform', 'platform', 6], ['country', 'cc', 2], ['keyword', 'keyword', 40], [(r) => r.addedAt.slice(0, 10), 'added', 10]]));
   }
   if (sub === 'run') {
     const { analyzeKeywords } = await import('./research.js');
-    const rows = db.trackList(rest[0] ? appIdOf(rest[0]) : null).filter((r) => !opts.country || r.country === country);
+    const rows = db.trackList(rest[0] ? appIdOf(rest[0]) : null)
+      .filter((r) => (!opts.country || r.country === country) && (!opts.platform || r.platform === platformOf(opts)));
     const groups = new Map();
     for (const r of rows) {
-      const k = `${r.appId}|${r.country}`;
+      const k = `${r.appId}|${r.country}|${r.platform}`;
       if (!groups.has(k)) groups.set(k, []);
       groups.get(k).push(r.keyword);
     }
     const results = [];
     for (const [k, terms] of groups) {
-      const [appId, cc] = k.split('|');
+      const [appId, cc, platform] = k.split('|');
       for (let i = 0; i < terms.length; i += 100) {
-        const r = await analyzeKeywords(terms.slice(i, i + 100), { country: cc, appId, allowLogin: opts.login });
+        const r = await analyzeKeywords(terms.slice(i, i + 100), { country: cc, appId, platform, allowLogin: opts.login });
         results.push(r);
       }
     }
-    const summary = results.flatMap((r) => r.items.map((i) => ({ appId: r.appId, country: r.country, keyword: i.keyword, rank: i.rank, popularity: i.popularity, difficulty: i.difficulty })));
+    const summary = results.flatMap((r) => r.items.map((i) => ({ appId: r.appId, platform: r.platform, country: r.country, keyword: i.keyword, rank: i.rank, popularity: i.popularity, difficulty: i.difficulty })));
     return print({ checked: summary.length, items: summary, warnings: [...new Set(results.flatMap((r) => r.warnings))] },
       (o) => (o.items.length ? table(o.items, [['appId', 'app', 11], ['country', 'cc', 2], ['keyword', 'keyword', 36], [(i) => i.rank ?? '>250', 'rank', 5], ['popularity', 'pop', 4], ['difficulty', 'diff', 4]]) : 'nothing tracked, add with `aso track add <appId> "k1,k2"`'));
   }
@@ -349,8 +359,9 @@ async function cmdRanks(args, opts) {
   const db = await import('./db.js');
   const appId = appIdOf(args[0] ?? loadConfig().appId);
   const country = countryOf(opts);
-  const items = db.latestRanks(appId, country).map((r) => ({ ...r, change: delta(r.rank, r.previousRank) }));
-  print({ appId, country, items }, (o) => (o.items.length
+  const platform = platformOf(opts);
+  const items = db.latestRanks(appId, country, platform).map((r) => ({ ...r, change: delta(r.rank, r.previousRank) }));
+  print({ appId, country, platform, items }, (o) => (o.items.length
     ? table(o.items, [['keyword', 'keyword', 36], [(r) => r.rank ?? (r.checkedAt ? '>250' : '–'), 'rank', 5], ['change', 'Δ', 5], ['popularity', 'pop', 4], ['difficulty', 'diff', 4], [(r) => r.checkedAt?.slice(0, 16).replace('T', ' '), 'checked', 16]])
     : `no tracked keywords for ${appId} in ${country}. Run \`aso track add ${appId} "k1,k2"\` then \`aso track run\``));
 }
@@ -360,8 +371,9 @@ async function cmdHistory(args, opts) {
   const keyword = args.join(' ').trim().toLowerCase();
   if (!keyword) throw usage('aso history "<keyword>" [--app id] [--days 90]');
   const appId = opts.app ? appIdOf(opts.app) : loadConfig().appId;
-  const h = db.keywordHistory(keyword, countryOf(opts), appId, int(opts.days, 90));
-  const out = { keyword, country: countryOf(opts), appId, ...h };
+  const platform = platformOf(opts);
+  const h = db.keywordHistory(keyword, countryOf(opts), appId, int(opts.days, 90), platform);
+  const out = { keyword, country: countryOf(opts), platform, appId, ...h };
   print(out, (o) => {
     const byDay = new Map();
     for (const s of o.snapshots) byDay.set(s.observedAt.slice(0, 10), { day: s.observedAt.slice(0, 10), popularity: s.popularity, difficulty: s.difficulty });

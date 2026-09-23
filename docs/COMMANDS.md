@@ -5,7 +5,7 @@ Force either with `--json` or `--table`. Errors are JSON on stdout (`{"error":{"
 
 Exit codes: `0` ok · `1` runtime error · `2` usage error · `3` Apple sign-in needed (run `aso login`).
 
-Global flags: `-c, --country <CC>` (storefront, default from config, usually `US`) · `--json` · `--table`.
+Global flags: `-c, --country <CC>` (storefront, default from config, usually `US`) · `-p, --platform iphone|mac` (default `iphone`; applies to `keywords`, `search`, `track`, `ranks`, `history`) · `--json` · `--table`.
 
 ## Setup & auth
 
@@ -58,7 +58,7 @@ Key output fields for `aso keywords`:
 - `confidence` = `high` (10+ competing apps and real popularity), `medium`, or `low`.
 - `brand` = `true` when the term is another app's brand (all words are in the #1 app's developer name and it clearly owns the term). Don't target these.
 - `opportunity` = `popularity × (100 − difficulty) / 100`, a sort key, not a forecast.
-- `rank` = position in Apple's own App Store search order (about 250 deep, unpersonalized iPhone results; `null` = not in the top 250).
+- `rank` = position in Apple's own App Store search order (about 250 deep, unpersonalized iPhone results; `null` = not in the top 250). With `-p mac`: the Mac App Store's exact order for the top ~12 (its web search page), then the iTunes Search API's Mac results, which are close to but not exactly the store order. Popularity is Apple Ads data and is the same for both platforms.
 
 ## Tracking & history (local SQLite at `~/.aso/aso.db`)
 

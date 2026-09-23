@@ -51,7 +51,7 @@ export async function withAppleAds(fn, { allowLogin = true } = {}) {
   }
 }
 
-export async function analyzeKeywords(terms, { country, appId, fresh = false, allowLogin = true, record = true, minPopularity = null, maxDifficulty = null } = {}) {
+export async function analyzeKeywords(terms, { country, appId, platform = 'iphone', fresh = false, allowLogin = true, record = true, minPopularity = null, maxDifficulty = null } = {}) {
   const warnings = [];
   const pops = new Map();
   const needed = fresh ? terms : terms.filter((t) => {
@@ -96,7 +96,7 @@ export async function analyzeKeywords(terms, { country, appId, fresh = false, al
     let hintCount = 0;
     try {
       [results, hintCount] = await Promise.all([
-        searchResults(keyword, country),
+        searchResults(keyword, country, { platform }),
         hints(keyword, country).then((h) => h.length, () => 0),
       ]);
     } catch (e) {
@@ -111,8 +111,8 @@ export async function analyzeKeywords(terms, { country, appId, fresh = false, al
       rating: a.rating, ratingCount: a.ratingCount, updatedAt: a.updatedAt, match: keywordMatch(keyword, a.name, a.subtitle),
     }));
     if (record && results) {
-      recordKeyword({ keyword, country, observedAt, popularity: pop, difficulty: diff, appCount: results.appCount, topApps });
-      if (appId) recordRank({ appId: String(appId), keyword, country, observedAt, rank });
+      recordKeyword({ keyword, country, platform, observedAt, popularity: pop, difficulty: diff, appCount: results.appCount, topApps });
+      if (appId) recordRank({ appId: String(appId), keyword, country, platform, observedAt, rank });
     }
     return {
       keyword,
@@ -134,7 +134,7 @@ export async function analyzeKeywords(terms, { country, appId, fresh = false, al
     }
     return true;
   });
-  return { country, appId: appId ? String(appId) : null, observedAt, items, filteredOut, warnings };
+  return { country, platform, appId: appId ? String(appId) : null, observedAt, items, filteredOut, warnings };
 }
 
 export async function suggest(seed, { country, limit = 50, allowLogin = true } = {}) {

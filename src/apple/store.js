@@ -52,9 +52,9 @@ export function parseCount(value) {
 }
 
 // Top results in true App Store order, with subtitles (usually ~10-12 apps).
-export async function searchPage(term, country) {
+export async function searchPage(term, country, platform = 'iphone') {
   const { code } = sf(country);
-  const html = await get(`https://apps.apple.com/${code.toLowerCase()}/iphone/search?term=${encodeURIComponent(term)}`);
+  const html = await get(`https://apps.apple.com/${code.toLowerCase()}/${platform === 'mac' ? 'mac' : 'iphone'}/search?term=${encodeURIComponent(term)}`);
   const data = serializedData(html);
   const apps = [];
   for (const shelf of data?.shelves ?? []) {
@@ -92,9 +92,9 @@ function fromItunes(r) {
   };
 }
 
-export async function itunesSearch(term, country, limit = MAX_RESULTS) {
+export async function itunesSearch(term, country, limit = MAX_RESULTS, platform = 'iphone') {
   const { code } = sf(country);
-  const q = new URLSearchParams({ term, country: code, entity: 'software', limit: String(limit) });
+  const q = new URLSearchParams({ term, country: code, entity: platform === 'mac' ? 'macSoftware' : 'software', limit: String(Math.min(limit, 200)) });
   const data = await get(`https://itunes.apple.com/search?${q}`, { json: true });
   return (data?.results ?? []).filter((r) => r.trackId).map(fromItunes);
 }
@@ -104,7 +104,7 @@ export async function lookup(ids, country) {
   const { code } = sf(country);
   const out = [];
   for (let i = 0; i < ids.length; i += 100) {
-    const q = new URLSearchParams({ id: ids.slice(i, i + 100).join(','), country: code, entity: 'software' });
+    const q = new URLSearchParams({ id: ids.slice(i, i + 100).join(','), country: code });
     const data = await get(`https://itunes.apple.com/lookup?${q}`, { json: true });
     for (const r of data?.results ?? []) if (r.trackId) out.push({ ...fromItunes(r), raw: r });
   }
@@ -131,13 +131,16 @@ export async function storeSearch(term, country) {
   return { ids: bubble.results.filter((r) => r.entity === 'software').map((r) => String(r.id)), details };
 }
 
-// Full ranked result list for a term. Order comes from Apple's store search (true ranking, ~250 deep);
-// if that is unavailable, the App Store web page (top ~11) followed by the iTunes Search API.
+// Full ranked result list for a term. iPhone order comes from Apple's store search (true ranking,
+// ~250 deep); if that is unavailable, the App Store web page (top ~11) followed by the iTunes Search API.
+// Mac order: the Mac App Store web page (exact top ~12), then the iTunes Search API's Mac results
+// (close to, not exactly, the store order), since Apple's store search only serves iPhone results.
 // Details for the top apps are merged from the web page (subtitles) and iTunes lookup (exact counts, dates).
-export async function searchResults(term, country, { limit = MAX_RESULTS } = {}) {
+export async function searchResults(term, country, { limit = MAX_RESULTS, platform = 'iphone' } = {}) {
+  const mac = platform === 'mac';
   const [store, top] = await Promise.all([
-    storeSearch(term, country).catch(() => null),
-    searchPage(term, country).catch(() => []),
+    mac ? null : storeSearch(term, country).catch(() => null),
+    searchPage(term, country, platform).catch(() => []),
   ]);
   let order;
   let source;
@@ -146,10 +149,10 @@ export async function searchResults(term, country, { limit = MAX_RESULTS } = {})
     order = store.ids;
     source = 'app-store';
   } else {
-    const deep = await itunesSearch(term, country);
+    const deep = await itunesSearch(term, country, MAX_RESULTS, platform);
     for (const a of deep) byId.set(a.id, a);
     order = [...new Set([...top.map((a) => a.id), ...deep.map((a) => a.id)])];
-    source = 'itunes-search';
+    source = mac ? 'mac-app-store-web+itunes-mac' : 'app-store-web+itunes-search';
   }
   const wanted = order.slice(0, Math.min(limit, 20)).filter((id) => !byId.has(id));
   for (const a of await lookup(wanted, country).catch(() => [])) byId.set(a.id, a);
@@ -171,7 +174,7 @@ export async function searchResults(term, country, { limit = MAX_RESULTS } = {})
       ratingCount: it.ratingCount ?? mz.ratingCount ?? web.ratingCount ?? 0,
     };
   });
-  return { apps, appCount: order.length, source };
+  return { apps, appCount: order.length, source, platform: mac ? 'mac' : 'iphone' };
 }
 
 // Rank of `appId` for a term, or null when outside the top results.

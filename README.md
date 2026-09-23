@@ -90,6 +90,7 @@ aso track add 1234567890 "white noise,sleep sounds"
 aso track run                  # add to cron: 0 9 * * * aso track run --json >> ~/.aso/track.log 2>&1
 aso ranks 1234567890           # rank, change since last check, popularity, difficulty
 aso history "white noise" --app 1234567890
+aso track add 1234567890 "white noise" -p mac   # Mac App Store ranks too
 ```
 
 With the skills installed, just ask your agent: *"Do a full ASO audit of my app 1234567890 and propose a new subtitle and keyword field."*
@@ -127,7 +128,7 @@ Everything except popularity (search, ranks, difficulty, lint, history) works wi
 | `difficulty` | 0–100, higher is harder. Our ASOManiac model, calibrated against third-party difficulty scores (Pearson r 0.87): competition from the top 10 apps' ratings (55%), demand (10%), their average rating (35%). |
 | `brand` | `true` when the term is another app's brand name, like "spotify". Skip those. |
 | `opportunity` | `popularity × (100 − difficulty) / 100`: a sort key, not a forecast. |
-| `rank` | Your position in App Store search, in Apple's own result order (the same list the App Store app shows, about 250 deep). `null` means not in the top 250. Unpersonalized US-English iPhone results. |
+| `rank` | Your position in App Store search, in Apple's own result order (the same list the App Store app shows, about 250 deep). `null` means not in the top 250. Unpersonalized iPhone results; add `-p mac` for the Mac App Store. |
 
 All commands print JSON when piped (for agents) and tables in a terminal. See [docs/COMMANDS.md](docs/COMMANDS.md) for the full reference.
 
