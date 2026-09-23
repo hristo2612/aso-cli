@@ -13,10 +13,11 @@ Setup
   aso setup                         first-run wizard (Apple ID → Keychain, your app, sign-in)
   aso login [--manual]              sign in to Apple Ads in Chrome (auto-fills Keychain + 2FA)
   aso status                        config, session and live Apple Ads check
-  aso config [key] [value]          show/set: appId, orgId, country, appleId, autoLogin
+  aso config [key] [value]          show/set: appId, country, appleId, autoLogin
 
 Research
   aso keywords <terms…> [--app id]  popularity, difficulty, opportunity, competitors, your rank
+                    [--min-popularity n] [--max-difficulty n] [--fresh]
   aso suggest <seed>                keyword ideas (Apple Ads recommendations + autocomplete)
   aso search <term>                 live App Store results for a term
   aso app <appId> [--lang en-US]    public listing details
@@ -44,6 +45,8 @@ const OPTIONS = {
   json: { type: 'boolean' },
   table: { type: 'boolean' },
   fresh: { type: 'boolean' },
+  'min-popularity': { type: 'string' },
+  'max-difficulty': { type: 'string' },
   limit: { type: 'string' },
   lang: { type: 'string' },
   days: { type: 'string' },
@@ -74,8 +77,10 @@ function countryOf(opts) {
 }
 
 const appIdOf = (value) => {
-  const id = String(value ?? '').replace(/^id/, '');
-  if (!/^\d{5,15}$/.test(id)) throw usage(`"${value}" is not an App Store app id (digits, e.g. 1234567890)`);
+  const hint = 'It is the number after /id in the App Store URL; find it with `aso search "<app name>"`';
+  if (value == null || value === '') throw new CliError('CLI_USAGE_ERROR', 'Missing app id', { hint, exitCode: 2 });
+  const id = String(value).replace(/^id/, '');
+  if (!/^\d{5,15}$/.test(id)) throw new CliError('CLI_USAGE_ERROR', `"${value}" is not an App Store app id`, { hint, exitCode: 2 });
   return id;
 };
 
@@ -84,48 +89,76 @@ const appIdOf = (value) => {
 async function cmdSetup() {
   const { hasKeychain, promptAndStorePassword, getPassword } = await import('./keychain.js');
   const { itunesSearch } = await import('./apple/store.js');
-  const rl = readline.createInterface({ input: process.stdin, output: process.stderr });
-  const ask = async (q, def) => (await rl.question(`${q}${def ? ` [${def}]` : ''}: `)).trim() || def || '';
   const config = loadConfig();
+  let rl = readline.createInterface({ input: process.stdin, output: process.stderr });
+  const ask = async (q, def) => (await rl.question(`  ${q}${def ? ` [${def}]` : ''}: `)).trim() || def || '';
+  const out = (msg = '') => process.stderr.write(`${msg}\n`);
   try {
-    process.stderr.write(`\naso setup: free ASO toolkit. Everything stays on this machine (~/.aso).\n
-Keyword popularity comes from Apple Ads. You need an Apple ID that can open https://app-ads.apple.com
-(sign up free at https://searchads.apple.com, link your App Store Connect account; no campaign or billing needed).
-Search, ranks, difficulty and history work without it.\n\n`);
-    const country = (await ask('Default country', config.country || 'US')).toUpperCase();
-    if (!storefront(country)) throw usage(`Unknown country ${country}`);
-    const appleId = await ask('Apple ID email for Apple Ads (blank to skip)', config.appleId);
-    let appId = config.appId;
-    const appAnswer = await ask('Your app (App Store id or name)', appId);
-    if (appAnswer && !/^\d+$/.test(appAnswer)) {
-      const found = (await itunesSearch(appAnswer, country, 8));
-      found.forEach((a, i) => process.stderr.write(`  ${i + 1}) ${a.name} by ${a.developer} (${a.id})\n`));
-      const pick = int(await ask('Pick a number', '1'), 1);
-      appId = found[pick - 1]?.id ?? null;
-    } else if (appAnswer) appId = appAnswer;
-    let orgId = config.orgId;
-    if (appleId) {
-      orgId = await ask('Apple Ads org id (only if your account has several orgs: the number in app-ads.apple.com/cm/app/<id>/… for the org that has your app; blank = default)', orgId) || null;
-    }
-    saveConfig({ country, appleId: appleId || null, appId: appId || null, orgId: orgId || null });
-    process.stderr.write(`\nsaved ${PATHS.config}\n`);
+    out(`\n  aso setup  ·  free ASO toolkit, everything stays on this machine (~/.aso)\n`);
+    out('  1/3  Apple Ads (for keyword popularity)');
+    out('       Use the Apple ID you sign in to App Store Connect with. It needs a free Apple Ads account:');
+    out('       https://searchads.apple.com (no campaign or payment needed). Press Enter to skip for now;');
+    out('       search, ranks, difficulty and lint work without it.\n');
+    const appleId = await ask('Apple ID email', config.appleId);
+    saveConfig({ appleId: appleId || null });
 
-    if (appleId && hasKeychain) {
-      const has = await getPassword(config.keychainService, appleId);
-      const store = await ask(`${has ? 'Update' : 'Save'} the Apple ID password in the macOS Keychain for automatic sign-in? (y/n)`, has ? 'n' : 'y');
-      if (/^y/i.test(store)) {
-        rl.pause();
-        await promptAndStorePassword(config.keychainService, appleId);
-        rl.resume();
-        process.stderr.write(`stored in Keychain (service "${config.keychainService}")\n`);
+    let apps = [];
+    if (appleId) {
+      if (hasKeychain) {
+        const has = await getPassword(config.keychainService, appleId);
+        const store = await ask(`${has ? 'Update the saved' : 'Save your'} Apple ID password in the macOS Keychain so sign-in is automatic? (y/n)`, has ? 'n' : 'y');
+        if (/^y/i.test(store)) {
+          rl.close();
+          out('       (typed into macOS `security`, never shown or sent anywhere)');
+          await promptAndStorePassword(config.keychainService, appleId);
+          rl = readline.createInterface({ input: process.stdin, output: process.stderr });
+          out('       saved to Keychain');
+        }
+      } else {
+        out('       Tip: export ASO_APPLE_PASSWORD for automatic sign-in on this OS.');
       }
-    } else if (appleId) {
-      process.stderr.write('Tip: set ASO_APPLE_PASSWORD in your environment for automatic sign-in on this OS.\n');
+      out('\n       Opening Chrome to sign in. Approve the 2FA prompt if Apple asks.');
+      rl.close();
+      try {
+        const { login } = await import('./login.js');
+        const r = await login({});
+        apps = r.apps ?? [];
+        out(`       ✓ connected to Apple Ads org ${r.org}`);
+      } catch (e) {
+        out(`       ✗ ${e.message}${e.hint ? `\n         ${e.hint}` : ''}`);
+        out('       You can finish this later with `aso login`.');
+      }
+      rl = readline.createInterface({ input: process.stdin, output: process.stderr });
     }
-    const doLogin = appleId ? await ask('Sign in to Apple Ads now? (y/n)', 'y') : 'n';
-    rl.close();
-    if (/^y/i.test(doLogin)) await cmdLogin({});
-    process.stderr.write(`\nDone. Try:\n  aso keywords "white noise,sleep sounds"\n  aso suggest meditation\n  aso search "habit tracker"\n`);
+
+    out('\n  2/3  Your app (for rank tracking)');
+    let appId = config.appId;
+    if (apps.length) {
+      apps.forEach((a, i) => out(`       ${i + 1}) ${a.name} (${a.id})`));
+      out('       …or type another App Store id or app name');
+    }
+    const answer = await ask(apps.length ? 'Pick a number' : 'App Store id or app name (blank to skip)', apps.length ? '1' : appId);
+    if (apps.length && /^\d{1,2}$/.test(answer) && apps[Number(answer) - 1]) appId = apps[Number(answer) - 1].id;
+    else if (/^\d{5,}$/.test(answer)) appId = answer;
+    else if (answer) {
+      const found = await itunesSearch(answer, config.country || 'US', 8);
+      if (!found.length) out('       no App Store match, skipping');
+      found.forEach((a, i) => out(`       ${i + 1}) ${a.name} by ${a.developer} (${a.id})`));
+      const pick = found.length ? int(await ask('Pick a number', '1'), 1) : 0;
+      appId = found[pick - 1]?.id ?? appId;
+    }
+
+    out('\n  3/3  Default country');
+    let country = (await ask('Two-letter App Store country code', config.country || 'US')).toUpperCase();
+    if (!storefront(country)) { out(`       unknown country ${country}, using US (see \`aso storefronts\`)`); country = 'US'; }
+    saveConfig({ appId: appId || null, country });
+
+    out(`\n  Done. Saved ${PATHS.config}\n`);
+    out('  Try:');
+    out('    aso keywords "habit tracker,daily habits"');
+    out('    aso suggest "habit tracker"');
+    out(`    ${appId ? `aso track add ${appId} "habit tracker" && aso track run` : 'aso search "habit tracker"'}`);
+    out('\n  Give your AI agent the ASO skills:  npx skills add hristo2612/aso-cli\n');
   } finally {
     rl.close();
   }
@@ -134,7 +167,7 @@ Search, ranks, difficulty and history work without it.\n\n`);
 async function cmdLogin(opts) {
   const { login } = await import('./login.js');
   const result = await login({ manual: !!opts.manual, timeoutSec: int(opts.timeout, 300), trust: opts.trust !== false });
-  print(result, (r) => `signed in ✓${r.verified ? ' (Apple Ads popularity verified)' : r.warning ? `\nwarning: ${r.warning}` : '\nset your app with `aso config appId <id>` to verify popularity access'}`);
+  print(result, (r) => `✓ signed in to Apple Ads, org ${r.org}\n  popularity queries use ${r.queryApp}\n  your linked apps: ${r.apps.map((a) => `${a.name} (${a.id})`).join(', ')}`);
 }
 
 async function cmdStatus() {
@@ -148,27 +181,37 @@ async function cmdStatus() {
     config: { appleId: config.appleId, appId: config.appId, country: config.country, autoLogin: config.autoLogin },
     passwordSaved: config.appleId ? !!(await getPassword(config.keychainService, config.appleId)) : false,
     keychain: hasKeychain,
-    session: session ? { capturedAt: session.capturedAt, ageHours: Math.round((Date.now() - Date.parse(session.capturedAt)) / 36e5) } : null,
+    session: session ? {
+      capturedAt: session.capturedAt,
+      ageHours: Math.round((Date.now() - Date.parse(session.capturedAt)) / 36e5),
+      org: session.orgId ?? null,
+      queryApp: session.adsAppId ?? null,
+    } : null,
     appleAds: 'not checked',
+    next: [],
   };
-  if (session && config.appId) {
-    const { popularity } = await import('./apple/ads.js');
+  if (session?.cookieHeader) {
+    const { popularity, requireSession } = await import('./apple/ads.js');
     try {
-      await popularity(['photo'], config.country, { ...session, appId: config.appId });
+      await popularity(['photo'], 'US', requireSession());
       out.appleAds = 'ok';
     } catch (e) {
-      out.appleAds = e.code === 'AUTH_REQUIRED' ? 'expired, run `aso login`' : e.message;
+      out.appleAds = e.code === 'AUTH_REQUIRED' ? 'session expired' : e.message;
     }
-  } else if (!session) out.appleAds = 'no session, run `aso login`';
-  else out.appleAds = 'no app configured, run `aso config appId <id>`';
+  } else out.appleAds = 'not signed in';
+  if (!config.appleId) out.next.push('Run `aso setup` to connect Apple Ads (keyword popularity)');
+  else if (!out.passwordSaved) out.next.push('Run `aso setup` to save your Apple ID password for automatic sign-in');
+  if (config.appleId && out.appleAds !== 'ok') out.next.push(config.autoLogin && out.passwordSaved ? 'Nothing to do: the next popularity request signs in automatically (or run `aso login` now)' : 'Run `aso login`');
+  if (!config.appId) out.next.push('Set your app for rank tracking: `aso config appId <id>` (find it with `aso search "<your app name>"`)');
   out.ready = out.appleAds === 'ok';
   print(out, (o) => [
     `aso ${o.version} (node ${o.node})  home ${o.home}`,
     `Apple ID     ${o.config.appleId ?? '–'}${o.passwordSaved ? ' (password in Keychain)' : ''}`,
-    `App          ${o.config.appId ?? '–'}`,
+    `Your app     ${o.config.appId ?? '–'}`,
     `Country      ${o.config.country}`,
-    `Session      ${o.session ? `${o.session.ageHours}h old` : '–'}`,
-    `Apple Ads    ${o.appleAds}`,
+    `Session      ${o.session ? `${o.session.ageHours}h old, org ${o.session.org ?? '–'}` : '–'}`,
+    `Apple Ads    ${o.appleAds === 'ok' ? '✓ ok' : o.appleAds}`,
+    ...(o.next.length ? ['', 'Next:', ...o.next.map((n) => `  • ${n}`)] : []),
   ].join('\n'));
 }
 
@@ -193,7 +236,16 @@ async function cmdKeywords(args, opts) {
   if (!terms.length) throw usage('Give at least one keyword: aso keywords "k1,k2"');
   if (terms.length > 100) throw usage('At most 100 keywords per call');
   const appId = opts.app ? appIdOf(opts.app) : loadConfig().appId;
-  const result = await analyzeKeywords(terms, { country: countryOf(opts), appId, fresh: opts.fresh, allowLogin: opts.login });
+  const num = (v, name) => {
+    if (v == null) return null;
+    const n = Number(v);
+    if (!Number.isFinite(n)) throw usage(`--${name} must be a number`);
+    return n;
+  };
+  const result = await analyzeKeywords(terms, {
+    country: countryOf(opts), appId, fresh: opts.fresh, allowLogin: opts.login,
+    minPopularity: num(opts['min-popularity'], 'min-popularity'), maxDifficulty: num(opts['max-difficulty'], 'max-difficulty'),
+  });
   print(result, (r) => table(r.items, [
     ['keyword', 'keyword', 32],
     [(i) => (i.popularity == null ? '–' : i.popularityFloor ? '5*' : i.popularity), 'pop', 4],
@@ -201,8 +253,11 @@ async function cmdKeywords(args, opts) {
     ['opportunity', 'opp', 4],
     ['appCount', 'apps', 4],
     ...(r.appId ? [[(i) => i.rank ?? '>200', 'rank', 5]] : []),
-    [(i) => i.topApps.slice(0, 3).map((a) => a.name).join(' · '), 'top apps', 60],
-  ]) + (r.items.some((i) => i.popularityFloor) ? '\n* 5 = Apple floor (low or unknown volume)' : ''));
+    [(i) => (i.brand ? 'brand' : i.confidence), 'signal', 6],
+    [(i) => i.topApps.slice(0, 3).map((a) => a.name).join(' · '), 'top apps', 56],
+  ]) + (r.items.some((i) => i.popularityFloor) ? '\n* 5 = Apple floor (low or unknown volume)' : '')
+    + (r.items.some((i) => i.brand) ? "\nbrand = another app's brand name, skip it" : '')
+    + (r.filteredOut.length ? `\nfiltered out: ${r.filteredOut.map((f) => f.keyword).join(', ')}` : ''));
 }
 
 async function cmdSuggest(args, opts) {
@@ -336,7 +391,12 @@ async function cmdDb(args) {
   if (!args.length) {
     return print({ path: PATHS.db, tables: db.tables() }, (o) => `${o.path}\n\n${table(o.tables, [['name', 'table', 20], ['rows', 'rows', 8], ['columns', 'columns', 90]])}`);
   }
-  const rows = db.readOnlyQuery(args.join(' '));
+  let rows;
+  try {
+    rows = db.readOnlyQuery(args.join(' '));
+  } catch (e) {
+    throw new CliError('SQL_ERROR', `SQL error: ${e.message}`, { hint: `Read-only queries only. Tables: ${db.tables().map((t) => t.name).join(', ')}`, exitCode: 2 });
+  }
   print({ rows }, (o) => (o.rows.length ? table(o.rows, Object.keys(o.rows[0]).map((k) => [k, k, 40])) : '(no rows)'));
 }
 
@@ -363,7 +423,9 @@ export async function main(argv) {
   try {
     parsed = parseArgs({ args: argv, options: OPTIONS, allowPositionals: true, allowNegative: true });
   } catch (e) {
-    printError(usage(e.message));
+    if (argv.includes('--table')) setMode('table');
+    if (argv.includes('--json')) setMode('json');
+    printError(usage(e.message.replace(/\. To specify a positional argument.*$/s, '')));
     return 2;
   }
   const { values: opts, positionals } = parsed;
@@ -393,7 +455,10 @@ export async function main(argv) {
   };
   const run = commands[cmd];
   try {
-    if (!run) throw usage(`Unknown command "${cmd}"`);
+    if (!run) {
+      const near = Object.keys(commands).find((c) => c.startsWith(cmd.slice(0, 3)) || cmd.startsWith(c.slice(0, 3)));
+      throw new CliError('CLI_USAGE_ERROR', `Unknown command "${cmd}"`, { hint: near ? `Did you mean \`aso ${near}\`? (\`aso --help\` lists everything)` : 'Run `aso --help`', exitCode: 2 });
+    }
     await run();
     return 0;
   } catch (e) {

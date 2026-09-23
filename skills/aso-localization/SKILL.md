@@ -53,7 +53,7 @@ Across **different** storefronts (US vs GB as separate stores), duplication is f
 
 ## Step 4: Assemble and validate every locale at once
 
-Draft title/subtitle/keywords per locale following `aso-metadata`'s per-field rules (natural title, benefit subtitle, packed keywords field, no cross-field repeats). Then validate the whole fastlane metadata tree in one pass:
+Draft title/subtitle/keywords per locale following `aso-metadata`'s per-field rules (natural title, benefit subtitle, packed keywords field, no cross-field repeats). Remember the keywords field's limit is **100 bytes, not characters**: for CJK locales (ja, zh-Hans, zh-Hant) and Arabic, each character costs 2–3 bytes, so those locales genuinely fit fewer tokens than en-US does for the same field. Don't count characters and assume the budget matches; check `aso lint`'s byte count for that locale. Then validate the whole fastlane metadata tree in one pass:
 
 ```bash
 aso lint --fastlane <metadata dir>
@@ -71,9 +71,18 @@ aso log add --app <appId> --locale es-MX --field keywords --old "<old>" --new "<
 
 Repeat per changed field per locale so `aso-tracking` can later attribute rank movement to the right locale and field.
 
+## Seasonal keyword calendar
+
+Seasonal pushes (holiday, back-to-school, a sale) need lead time and a plan to revert, they're not a permanent rewrite:
+
+- **Creative** (screenshots, icon variants, preview video): plan 4–6 weeks lead time to design and get through App Review.
+- **Localization QA** on any seasonal text change: 2–3 weeks lead time to check translations read naturally and lint clean across every locale.
+- **Promotional text is the safest seasonal lever**: not indexed, editable anytime with no new build, so put the timely message there first (see `aso-metadata`).
+- **Keywords field seasonal swaps**: touch only 2–4 of the weakest evergreen terms, not a wholesale rewrite. Log the swap (`aso log add`), then **revert after the peak** unless the swapped terms are measurably outperforming what they replaced.
+
 ## Output
 
-Coverage table (which locales are filled, chars used, unique-vs-primary term count), the per-locale draft metadata, the `aso lint --fastlane` result, and next steps (which unfilled locales are highest priority, based on their storefront's likely reach).
+Coverage table (which locales are filled, bytes used, unique-vs-primary term count), the per-locale draft metadata, the `aso lint --fastlane` result, and next steps (which unfilled locales are highest priority, based on their storefront's likely reach).
 
 ## Red flags
 

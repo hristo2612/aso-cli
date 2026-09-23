@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { keywordMatch, difficulty, opportunity, normalizeText } from '../src/difficulty.js';
+import { keywordMatch, difficulty, difficultyScore, opportunity, normalizeText, confidence, isBrandKeyword } from '../src/difficulty.js';
 import { lintMetadata, singular } from '../src/lint.js';
 import { parseCount, serializedData } from '../src/apple/store.js';
 import { storefront } from '../src/storefronts.js';
@@ -20,18 +20,31 @@ test('keywordMatch ranks title matches above subtitle matches', () => {
   assert.equal(keywordMatch('yoga', 'Calm', 'Sleep'), 'none');
 });
 
-test('difficulty is 1 with fewer than 5 competing apps', () => {
-  assert.equal(difficulty('x', [{ name: 'a' }], 1), 1);
+test('difficulty matches the calibrated ASOManiac model', () => {
+  // Reference values computed with the original AppStoreAdsScraper implementation's formula.
+  assert.equal(difficultyScore({ top10AvgRatingCount: 0, top3AvgRatingCount: 0, top10MaxRatingCount: 0, top1RatingCount: 0, top10AvgRating: 0, popularity: 5, autocompleteHintCount: 0 }), 0);
+  assert.equal(difficultyScore({ top10AvgRatingCount: 5e6, top3AvgRatingCount: 1e7, top10MaxRatingCount: 3e7, top1RatingCount: 3e7, top10AvgRating: 5, popularity: 100, autocompleteHintCount: 10 }), 100);
 });
 
 test('difficulty grows with competitor strength', () => {
-  const now = Date.parse('2026-09-01');
-  const weak = Array.from({ length: 5 }, (_, i) => ({ name: `App ${i}`, ratingCount: 3, rating: 3.5, releasedAt: '2020-01-01', updatedAt: '2021-01-01' }));
-  const strong = Array.from({ length: 5 }, () => ({ name: 'White Noise', ratingCount: 500000, rating: 4.8, releasedAt: '2016-01-01', updatedAt: '2026-08-20' }));
-  const easy = difficulty('white noise', weak, 30, now);
-  const hard = difficulty('white noise', strong, 200, now);
-  assert.ok(easy < 20, `easy=${easy}`);
-  assert.ok(hard > 80, `hard=${hard}`);
+  const weak = Array.from({ length: 10 }, () => ({ ratingCount: 3, rating: 3.2 }));
+  const strong = Array.from({ length: 10 }, () => ({ ratingCount: 500000, rating: 4.8 }));
+  assert.ok(difficulty(weak, { popularity: 20 }) < 20);
+  assert.ok(difficulty(strong, { popularity: 60, hintCount: 10 }) > 70);
+  assert.equal(difficulty([]), 0);
+});
+
+test('confidence', () => {
+  assert.equal(confidence(50, 40), 'high');
+  assert.equal(confidence(50, 5), 'medium');
+  assert.equal(confidence(2, 40), 'low');
+});
+
+test('brand keywords are detected', () => {
+  const apps = [{ name: 'Spotify: Music and Podcasts', developer: 'Spotify', ratingCount: 30000000 }, { name: 'Other', developer: 'X', ratingCount: 10 }];
+  assert.equal(isBrandKeyword('spotify', apps), true);
+  assert.equal(isBrandKeyword('spotify music', apps), true);
+  assert.equal(isBrandKeyword('music player', apps), false);
 });
 
 test('opportunity', () => {
@@ -57,6 +70,12 @@ test('lint passes clean metadata', () => {
 test('lint max length counts characters, not bytes', () => {
   assert.equal(lintMetadata({ title: 'ü'.repeat(30) }).issues.some((i) => i.rule === 'max-length'), false);
   assert.equal(lintMetadata({ title: 'a'.repeat(31) }).issues.some((i) => i.rule === 'max-length'), true);
+});
+
+test('keyword field limit is 100 UTF-8 bytes', () => {
+  const ja = 'カメラ'.repeat(12); // 36 characters, 108 bytes
+  assert.ok(lintMetadata({ title: 'A', keywords: ja }).issues.some((i) => i.rule === 'max-length'));
+  assert.ok(!lintMetadata({ title: 'A', keywords: 'a'.repeat(100) }).issues.some((i) => i.rule === 'max-length'));
 });
 
 test('singular', () => {

@@ -19,7 +19,10 @@ async function get(url, { headers = {}, json = false, attempts = 3 } = {}) {
     }
     await new Promise((r) => setTimeout(r, 500 * i * i));
   }
-  throw new CliError('APP_STORE_UNAVAILABLE', `App Store request failed (${lastError?.message}): ${url.split('?')[0]}`);
+  const offline = /ENOTFOUND|ECONNREFUSED|EAI_AGAIN|ENETUNREACH|fetch failed/i.test(`${lastError?.cause?.code} ${lastError?.message}`);
+  throw new CliError(offline ? 'NETWORK_ERROR' : 'APP_STORE_UNAVAILABLE',
+    offline ? 'Could not reach the App Store (are you offline?)' : `The App Store did not respond (${lastError?.message})`,
+    { hint: offline ? 'Check your internet connection and retry' : 'Apple may be having issues; retry in a minute' });
 }
 
 function sf(country) {
@@ -160,7 +163,7 @@ function decodeXml(s) {
 export async function appDetails(appId, country, lang) {
   const { code } = sf(country);
   const [it] = await lookup([String(appId)], country);
-  if (!it) throw new CliError('APP_NOT_FOUND', `App ${appId} not found in the ${code} App Store`, { exitCode: 2 });
+  if (!it) throw new CliError('APP_NOT_FOUND', `App ${appId} is not in the ${code} App Store`, { hint: 'Use the number after /id in the App Store URL, or try another country with -c', exitCode: 2 });
   const url = `https://apps.apple.com/${code.toLowerCase()}/app/id${appId}${lang ? `?l=${encodeURIComponent(lang)}` : ''}`;
   const page = serializedData(await get(url).catch(() => null));
   const lockup = page?.lockup ?? {};

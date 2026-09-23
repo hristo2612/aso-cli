@@ -36,12 +36,14 @@ Returns Apple Ads recommendations (with popularity) plus App Store autocomplete 
 ## Step 3: Score in batches
 
 ```bash
-aso keywords <term1> <term2> ... <termN> --app <appId> -c US
+aso keywords <term1> <term2> ... <termN> --app <appId> -c US --min-popularity 10 --max-difficulty 60
 ```
 
 Max 100 terms per call: chunk the pooled candidate list into batches of ≤100. Passing `--app` also returns your current rank per keyword, so you see baseline position, not just opportunity. Popularity is cached 24h; add `--fresh` if you need a live re-pull (e.g. right after a metadata change).
 
-Each result gives `popularity` (5–100, `5` = Apple's floor, flagged `popularityFloor`), `difficulty` (1–100), `opportunity = popularity × (100 − difficulty) / 100`, `appCount`, `topApps`, and your `rank`.
+`--min-popularity <n>` and `--max-difficulty <n>` pre-filter the batch; terms cut this way show up under the response's `filteredOut` with a reason, skim them once in case a relevant term got cut for the wrong reason.
+
+Each result gives `popularity` (5–100, `5` = Apple's floor, flagged `popularityFloor`), `difficulty` (0–100, our calibrated model: 55% competition from top-10 ratings, 10% demand from popularity + autocomplete, 35% market quality from top-10 average rating), `opportunity = popularity × (100 − difficulty) / 100`, `appCount`, `topApps`, your `rank`, `brand` (true = someone else's brand term, exclude it), and `confidence` (`high`/`medium`/`low`, trust in that term's numbers). **Drop every `brand: true` term from the candidate pool immediately**, it isn't a keyword opportunity.
 
 ## Step 4: Shortlist (relevance first, then opportunity)
 
@@ -69,16 +71,30 @@ An app with few ratings can't out-authority a competitor with 50k+ reviews on a 
 
 Bias new/small apps toward **more, narrower** keywords (3+ word phrases) over fewer broad ones: you win by being unambiguously the best answer to a specific query before you can compete on a generic one.
 
+## Keyword tiers
+
+Tag every shortlisted term with one tier, don't just leave a flat opportunity-sorted list:
+
+| Tier | Meaning |
+|---|---|
+| Primary | Top opportunity, relevant, within the app's difficulty ceiling: title/subtitle candidates |
+| Secondary | Solid opportunity, one step down from primary: keywords field candidates |
+| Long-tail | Low popularity (often floored at 5), low difficulty, multi-word: cheap volume in aggregate |
+| Defensive | Already ranking well here: keep it, don't let a rewrite accidentally drop it |
+| Competitor-gap | A specific competitor ranks, you don't (from `aso-competitors`) |
+| Experimental | `confidence: low`, or borderline relevance: worth a small test, not a big budget bet |
+| Avoid | `brand: true`, irrelevant, or difficulty well above this app's ceiling |
+
 ## Step 5: Output
 
 Ranked table, sorted by opportunity, relevant-only:
 
 ```
-| # | Keyword          | Pop | Diff | Opportunity | Your rank | Verdict |
-|---|-------------------|-----|------|-------------|-----------|---------|
-| 1 | baby cam          | 44  | 18   | 36.1        | -         | title/subtitle candidate |
-| 2 | nanny cam         | 35  | 15   | 29.8        | 34        | keywords field |
-| 3 | discreet camera   | 5*  | 22   | 3.9         | -         | long-tail, monitor only |
+| # | Keyword          | Pop | Diff | Opportunity | Your rank | Tier |
+|---|-------------------|-----|------|-------------|-----------|------|
+| 1 | baby cam          | 44  | 18   | 36.1        | -         | Primary |
+| 2 | nanny cam         | 35  | 15   | 29.8        | 34        | Secondary |
+| 3 | discreet camera   | 5*  | 22   | 3.9         | -         | Long-tail |
 ```
 (`*` = popularity floor, treat as "no signal" not "dead")
 

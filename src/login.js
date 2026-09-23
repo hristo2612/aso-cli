@@ -106,14 +106,94 @@ function sessionFrom(cookies) {
   return { cookieHeader: ok.map((c) => `${c.name}=${c.value}`).join('; '), xsrfToken: xsrf };
 }
 
+// Lists the Apple Ads orgs this Apple ID can use and the App Store apps linked to them.
+async function discover(page) {
+  return page.evaluate(async () => {
+    const get = async (url) => {
+      try {
+        const r = await fetch(url, { headers: { Accept: 'application/json' } });
+        return r.ok ? (await r.json()).data : null;
+      } catch { return null; }
+    };
+    const orgs = [];
+    const walk = (list) => {
+      for (const o of list ?? []) {
+        if (o.status === 'ACTIVE' && o.isAccessible !== false) orgs.push({ id: String(o.id), name: o.displayName || o.name });
+        walk(o.subOrgs);
+      }
+    };
+    walk((await get('/cm/api/v1/startup/orgs'))?.orgDetails);
+    const apps = ((await get('/cm/api/v1/apps?basic=true')) ?? []).map((a) => ({ id: String(a.adamId), name: a.appName }));
+    return { orgs, apps };
+  });
+}
+
+async function pageHasText(page, pattern) {
+  for (const frame of [...appleFrames(page), page.mainFrame()]) {
+    const text = await frame.locator('body').innerText({ timeout: 1000 }).catch(() => '');
+    if (pattern.test(text)) return true;
+  }
+  return false;
+}
+
+// Tries each org until Apple answers a popularity request. Apple keeps the selected org in the
+// server-side session, so switching means opening that org's dashboard.
+async function connect(context, page, config) {
+  let found = { orgs: [], apps: [] };
+  for (let i = 0; i < 5 && !found.orgs.length; i++) {
+    found = await discover(page);
+    if (!found.orgs.length) await sleep(2000);
+  }
+  if (!found.orgs.length || /signup|onboard|welcome|getstarted/i.test(page.url())) {
+    throw new CliError('NO_APPLE_ADS_ACCOUNT', 'This Apple ID has no Apple Ads account yet', {
+      hint: 'Create one for free at https://searchads.apple.com (pick United States if your country is not listed; no campaign or payment needed), then run `aso login`',
+      exitCode: 3,
+    });
+  }
+  if (!found.apps.length) {
+    throw new CliError('NO_LINKED_APPS', 'Your Apple Ads account has no App Store Connect apps linked', {
+      hint: 'In Apple Ads open account menu > Settings > Link Accounts, link your App Store Connect account, then run `aso login`',
+      exitCode: 3,
+    });
+  }
+  const adsApp = found.apps.find((a) => a.id === String(config.appId)) ?? found.apps[0];
+  const landed = new URL(page.url()).pathname.match(/\/cm\/app\/(\d+)/)?.[1];
+  const order = [...new Set([config.orgId, landed, ...found.orgs.map((o) => o.id)].filter(Boolean).map(String))];
+  for (const orgId of order) {
+    if (orgId !== new URL(page.url()).pathname.match(/\/cm\/app\/(\d+)/)?.[1]) {
+      await page.goto(`https://app-ads.apple.com/cm/app/${orgId}/report`, { waitUntil: 'domcontentloaded', timeout: 45000 }).catch(() => {});
+      await sleep(2500);
+    }
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      const session = sessionFrom(await context.cookies(COOKIE_URL));
+      if (!session) { await sleep(2000); continue; }
+      try {
+        await popularity(['photo'], 'US', { ...session, appId: adsApp.id });
+        return { session, orgId, org: found.orgs.find((o) => o.id === orgId)?.name ?? null, adsApp, apps: found.apps };
+      } catch (e) {
+        if (e.code === 'ADS_ORG_NOT_LINKED') break;
+        if (e.code !== 'AUTH_REQUIRED' || attempt === 3) throw e;
+        await sleep(2000);
+      }
+    }
+  }
+  throw new CliError('NO_LINKED_APPS', 'None of your Apple Ads orgs can read keyword popularity yet', {
+    hint: 'In Apple Ads open account menu > Settings > Link Accounts and link your App Store Connect account to an org, then run `aso login`',
+    exitCode: 3,
+  });
+}
+
 export async function login({ manual = false, timeoutSec = 300, trust = true, headless = false } = {}) {
   const config = loadConfig();
   const password = manual ? null : await getPassword(config.keychainService, config.appleId);
-  if (!manual && !password) say('no saved Apple ID password (run `aso setup` to save one); sign in manually in the browser');
+  if (!manual && !password) say('no saved Apple ID password (run `aso setup` to save one); sign in in the browser window');
   const context = await launch(headless);
+  let terminalCode = null;
   try {
     const page = context.pages()[0] || await context.newPage();
-    await page.goto(START_URL, { waitUntil: 'domcontentloaded', timeout: 45000 });
+    await page.goto(START_URL, { waitUntil: 'domcontentloaded', timeout: 45000 }).catch((e) => {
+      throw new CliError('NETWORK_ERROR', `Could not open Apple Ads (${e.message.split('\n')[0]})`, { hint: 'Check your internet connection and retry' });
+    });
     say('browser open, signing in to Apple Ads');
     const deadline = Date.now() + timeoutSec * 1000;
     let filled = false;
@@ -121,15 +201,12 @@ export async function login({ manual = false, timeoutSec = 300, trust = true, he
     let otpDone = false;
     let otpEntered = false;
     let codeAnnounced = false;
-    let terminalCode = null;
     let trustHandled = false;
     let lastCheck = 0;
-    let switchedOrg = false;
-    let verifyAttempts = 0;
 
     while (Date.now() < deadline) {
       const active = context.pages().at(-1) || page;
-      if (active.isClosed()) throw new CliError('BROWSER_CLOSED', 'The browser was closed before sign-in finished', { exitCode: 3 });
+      if (active.isClosed()) throw new CliError('BROWSER_CLOSED', 'The browser was closed before sign-in finished', { hint: 'Run `aso login` again', exitCode: 3 });
 
       if (password && !filled && await visible(active, 'input[type=email], #account_name_text_field')) {
         let preLoginPromptVisible = true;
@@ -140,9 +217,15 @@ export async function login({ manual = false, timeoutSec = 300, trust = true, he
         const startedAt = Date.now();
         filled = await fillCredentials(active, config.appleId, password).catch(() => false);
         if (filled) {
-          say(`signed in as ${config.appleId}, waiting for Apple`);
+          say(`signing in as ${config.appleId}`);
           otpContext = { expectedAccount: config.appleId, loginStartedAtMs: startedAt, preLoginPromptVisible };
         }
+      }
+
+      if (filled && await pageHasText(active, /(apple (id|account)|password) (or password )?(was|is) incorrect|check the account information/i)) {
+        throw new CliError('BAD_CREDENTIALS', `Apple rejected the Apple ID or password for ${config.appleId}`, {
+          hint: 'Run `aso setup` to save the correct password, or `aso login --manual` to type it yourself', exitCode: 3,
+        });
       }
 
       const codeBox = await visible(active, 'input.form-security-code-input');
@@ -157,7 +240,10 @@ export async function login({ manual = false, timeoutSec = 300, trust = true, he
               say('two-factor code read from the macOS prompt and entered');
               await dismissVerifiedPrompt(otpContext).catch(() => {});
             } else if (r.status !== 'absent') otpDone = true;
-          } catch { otpDone = true; }
+          } catch {
+            otpDone = true;
+            say('tip: to auto-fill 2FA codes, allow your terminal in System Settings > Privacy & Security > Accessibility');
+          }
         }
         if (!codeAnnounced && !otpEntered && (otpDone || !otpContext)) {
           codeAnnounced = true;
@@ -173,46 +259,25 @@ export async function login({ manual = false, timeoutSec = 300, trust = true, he
       }
 
       const url = new URL(active.url());
-      if (process.env.ASO_DEBUG) say(`debug url=${url.origin}${url.pathname} cookies=${(await context.cookies(COOKIE_URL)).map((c) => c.name).join(',')}`);
-      const onAds = url.hostname === 'app-ads.apple.com' && !(await visible(active, 'input[type=email], input[type=password], input.form-security-code-input'));
-      if (onAds) {
-        const session = sessionFrom(await context.cookies(COOKIE_URL));
-        if (session) {
-          terminalCode?.close();
-          const landedOrg = url.pathname.match(/\/cm\/app\/(\d+)/)?.[1] ?? null;
-          // Accounts with several orgs (campaign groups) land on a default one; switch to the org
-          // that owns your app, since popularity requests run in the context of the current org.
-          if (config.orgId && landedOrg !== String(config.orgId) && !switchedOrg) {
-            switchedOrg = true;
-            say(`switching to Apple Ads org ${config.orgId}`);
-            await active.goto(`https://app-ads.apple.com/cm/app/${config.orgId}/report`, { waitUntil: 'domcontentloaded', timeout: 45000 }).catch(() => {});
-            await sleep(3000);
-            continue;
-          }
-          const orgId = config.orgId ? String(config.orgId) : landedOrg;
-          const result = { ...session, orgId, appleId: config.appleId, capturedAt: new Date().toISOString() };
-          if (config.appId) {
-            try {
-              await popularity(['photo'], config.country, { ...result, appId: config.appId });
-              result.verified = true;
-            } catch (e) {
-              if (e.code === 'AUTH_REQUIRED' && ++verifyAttempts < 4) { await sleep(3000); continue; }
-              result.verified = false;
-              result.verifyError = e.code === 'AUTH_REQUIRED'
-                ? `Apple Ads org ${orgId} cannot read popularity for app ${config.appId}. If your account has several orgs, set the one with your app: aso config orgId <id> (the number in app-ads.apple.com/cm/app/<id>/…)`
-                : e.message;
-            }
-          }
-          saveSession(result);
-          if (orgId && result.verified !== false) saveConfig({ orgId });
-          return { status: 'signed_in', verified: result.verified ?? null, orgId, sessionFile: PATHS.session, ...(result.verifyError ? { warning: result.verifyError } : {}) };
-        }
+      if (process.env.ASO_DEBUG) say(`debug url=${url.origin}${url.pathname}`);
+      const signedIn = url.hostname === 'app-ads.apple.com'
+        && !(await visible(active, 'input[type=email], input[type=password], input.form-security-code-input'))
+        && sessionFrom(await context.cookies(COOKIE_URL));
+      if (signedIn) {
+        terminalCode?.close();
+        say('signed in, finding your Apple Ads org and apps');
+        const { session, orgId, org, adsApp, apps } = await connect(context, active, config);
+        saveSession({ ...session, orgId, adsAppId: adsApp.id, apps, appleId: config.appleId, capturedAt: new Date().toISOString() });
+        saveConfig({ orgId });
+        return { status: 'signed_in', verified: true, org: org ? `${org} (${orgId})` : orgId, queryApp: `${adsApp.name} (${adsApp.id})`, apps, sessionFile: PATHS.session };
       }
       await sleep(1000);
     }
-    terminalCode?.close();
-    throw new CliError('LOGIN_TIMEOUT', `Sign-in did not finish within ${timeoutSec}s`, { hint: 'Run `aso login` again', exitCode: 3 });
+    throw new CliError('LOGIN_TIMEOUT', `Sign-in did not finish within ${timeoutSec}s`, {
+      hint: 'Run `aso login` again (add --timeout 600 for more time, or --manual to type everything yourself)', exitCode: 3,
+    });
   } finally {
+    terminalCode?.close();
     await context.close().catch(() => {});
   }
 }

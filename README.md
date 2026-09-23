@@ -30,7 +30,7 @@ No account, no server, no telemetry, no subscription. One install and `aso setup
   <tr><td><b>Signs in by itself</b></td><td>Chrome plus your macOS Keychain plus the system 2FA prompt. Expired sessions refresh automatically, even mid-task.</td></tr>
   <tr><td><b>Remembers everything</b></td><td>Every lookup lands in a local SQLite file. Rank tracking, keyword history, a metadata change log, and raw SQL when you want it.</td></tr>
   <tr><td><b>Ships clean metadata</b></td><td><code>aso lint</code> catches duplicate words, wasted characters, stop words, plurals and trademark risks, for one locale or a whole fastlane metadata folder.</td></tr>
-  <tr><td><b>Built for agents</b></td><td>JSON when piped, stable exit codes, and 7 ASO skills for Claude Code, Codex, Cursor and more.</td></tr>
+  <tr><td><b>Built for agents</b></td><td>JSON when piped, stable exit codes, and 8 ASO skills for Claude Code, Codex, Cursor and more.</td></tr>
   <tr><td><b>Small and free</b></td><td>MIT licensed, plain Node, one dependency, nothing leaves your machine except requests to Apple.</td></tr>
 </table>
 
@@ -100,18 +100,30 @@ Popularity scores come from Apple Search Ads. You need an Apple ID that can open
 2. Link your App Store Connect account: Apple Ads → account menu → Settings → Link Accounts.
 3. Run `aso setup`.
 
-If your Apple Ads account has several orgs (campaign groups), pick the one that owns your app: `aso config orgId <id>`. The id is the number in `app-ads.apple.com/cm/app/<id>/…`.
+That's all. `aso login` finds the Apple Ads org that can read popularity and the apps linked to it by itself, even if your account has several orgs.
 
 Everything except popularity (search, ranks, difficulty, lint, history) works without Apple Ads.
 
 **How sign-in works:** `aso login` opens your installed Chrome with a dedicated profile (`~/.aso/browser`). It fills your Apple ID from the Keychain and, on macOS, reads the verification code from the system "Apple Account Verification" prompt. That needs Accessibility permission for your terminal; otherwise you type the code yourself. Only the Apple Ads session cookies are saved, to `~/.aso/session.json` (mode 600). When the session expires, `aso` signs in again on its own (`aso config autoLogin false` turns that off). On Linux, set `ASO_APPLE_PASSWORD` instead of using the Keychain.
+
+## If setup gets stuck
+
+| You see | Do this |
+| --- | --- |
+| `NO_APPLE_ADS_ACCOUNT` | Create a free Apple Ads account at [searchads.apple.com](https://searchads.apple.com) with the same Apple ID (pick United States if your country is missing), then `aso login`. |
+| `NO_LINKED_APPS` | In Apple Ads: account menu > Settings > Link Accounts, link App Store Connect, then `aso login`. |
+| `BAD_CREDENTIALS` | `aso setup` to save the right password, or `aso login --manual`. |
+| 2FA code isn't filled in | Allow your terminal in System Settings > Privacy & Security > Accessibility, or type the code in the browser (or the terminal). |
+| Popularity is 5 for many terms | Normal: Apple reports low-volume terms as 5. |
+| Anything else | `aso status` says what's missing and what to run next. Full error list in [docs/COMMANDS.md](https://github.com/hristo2612/aso-cli/blob/main/docs/COMMANDS.md#errors). |
 
 ## What the numbers mean
 
 | Field | Meaning |
 | --- | --- |
 | `popularity` | Apple Search Ads popularity, 5–100. Apple reports low-volume terms as `5`; `aso` re-checks those through recommendations, which often return the real value. |
-| `difficulty` | 1–100 estimate from the top 5 apps (ratings, rating velocity, quality, recency, keyword in title/subtitle) and the number of competing apps. |
+| `difficulty` | 0–100, higher is harder. Our ASOManiac model, calibrated against third-party difficulty scores (Pearson r 0.87): competition from the top 10 apps' ratings (55%), demand (10%), their average rating (35%). |
+| `brand` | `true` when the term is another app's brand name, like "spotify". Skip those. |
 | `opportunity` | `popularity × (100 − difficulty) / 100`: a sort key, not a forecast. |
 | `rank` | Your position in App Store search. The top ~10 come from the App Store web page, deeper positions from the iTunes Search API. `null` means not in the top 200. |
 
@@ -127,14 +139,15 @@ All commands print JSON when piped (for agents) and tables in a terminal. See [d
 | `aso-competitors` | Who you're up against, keyword gaps |
 | `aso-audit` | A–F health check of a listing |
 | `aso-tracking` | Rank tracking and before/after measurement |
-| `aso-localization` | New markets, native keywords, cross-locale indexing |
+| `aso-localization` | New markets, native keywords, cross-locale indexing, seasonal keywords |
+| `aso-conversion` | Icon, screenshots, preview video, custom product pages, in-app events |
 
 `aso` never uploads metadata. Ship changes with fastlane `deliver` or App Store Connect.
 
 ## Notes
 
 - The Apple Ads popularity endpoints are the private API behind the Apple Ads dashboard. They're unofficial and can change. `aso` limits itself to about one request per second.
-- The difficulty formula is adapted from [semihcihan/App-Store-Optimization-CLI](https://github.com/semihcihan/App-Store-Optimization-CLI) (MIT).
+- Thanks to [semihcihan/App-Store-Optimization-CLI](https://github.com/semihcihan/App-Store-Optimization-CLI) (MIT) for the App Store search parsing approach and brand-keyword detection.
 
 ## Development
 

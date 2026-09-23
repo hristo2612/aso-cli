@@ -77,9 +77,19 @@ QUICK WINS:
 
 For quick wins, hand off to `aso-metadata` to actually fit them into title/subtitle/keywords and lint the result: don't edit metadata directly from this skill.
 
+## Step 6: Ongoing monitoring
+
+Gap analysis is a snapshot; competitors keep moving. Set up a weekly or biweekly check as a standing complement to any one-off analysis, not a replacement for it:
+
+```bash
+aso app <competitorAppId> --lang en-US   # re-pull title, subtitle, description, rating, ratingCount
+```
+
+Diff against the last pull for: title/subtitle/description text changes (a competitor adding a term is a signal that term is working for them), and rating/ratingCount deltas (a sudden jump in ratings velocity often precedes or follows their own metadata or feature push). Log anything material and revisit the gap matrix if their metadata shifted meaningfully.
+
 ## Rules
 
 - **Never suggest adding a competitor's brand name as a keyword.** It risks App Review rejection and gains nothing Apple's algorithm rewards. `aso lint` flags competitor-brand risk: trust it.
 - Don't chase difficulty far above what the app's ratings count can realistically win (see `aso-keyword-research`'s ceiling table) just because a competitor ranks there.
 - 2–3 competitors give a cleaner signal than a long list: more just adds noise.
-- Re-run this after shipping quick-win keywords (2–4 weeks later, via `aso-tracking`) to confirm the gap actually closed.
+- Re-run the full gap analysis after shipping quick-win keywords (2–4 weeks later, via `aso-tracking`) to confirm the gap actually closed.

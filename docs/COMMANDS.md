@@ -11,10 +11,10 @@ Global flags: `-c, --country <CC>` (storefront, default from config, usually `US
 
 | Command | What it does |
 | --- | --- |
-| `aso setup` | Interactive first-run: Apple ID (password saved to macOS Keychain), your app, default country, then `aso login`. |
-| `aso login [--manual] [--timeout 300] [--no-trust]` | Opens Chrome, signs in to Apple Ads with the Keychain credentials, auto-reads the macOS 2FA prompt when possible, saves the session to `~/.aso/session.json`. `--manual` = you type everything. |
-| `aso status` | Config, session age, and a live check of Apple Ads access. |
-| `aso config [key] [value]` | Show/set config (`appId`, `orgId`, `country`, `appleId`, `autoLogin`). `orgId` picks the Apple Ads org (campaign group) that owns your app when your account has several: it's the number in `app-ads.apple.com/cm/app/<orgId>/…`. |
+| `aso setup` | Three-step first run: Apple ID (password saved to the macOS Keychain) and sign-in, pick your app from the apps linked to your Apple Ads account, default country. |
+| `aso login [--manual] [--timeout 300] [--no-trust]` | Opens Chrome, signs in to Apple Ads with the Keychain credentials, auto-reads the macOS 2FA prompt when possible, finds the Apple Ads org that can read popularity and an app to query with (automatic, even with several orgs), saves the session to `~/.aso/session.json`. `--manual` = you type everything. |
+| `aso status` | Config, session age, a live check of Apple Ads access, and `next` steps when something is missing. |
+| `aso config [key] [value]` | Show/set config (`appId`, `country`, `appleId`, `autoLogin`). `orgId` is detected by `aso login`; set it only to force a specific Apple Ads org. |
 
 Popularity needs an Apple Ads session. Everything else (search, ranks, difficulty, app lookup, lint) works without one; `popularity` is then `null`.
 When a session has expired and credentials are in the Keychain, `aso` re-runs the login automatically once (disable with `--no-login` or `aso config autoLogin false`).
@@ -23,8 +23,8 @@ When a session has expired and credentials are in the Keychain, `aso` re-runs th
 
 | Command | What it does |
 | --- | --- |
-| `aso keywords <terms…> [--app <id>] [--fresh]` | For each term (comma-separated or separate args, max 100): Apple Ads popularity (5–100), difficulty (1–100), `opportunity`, number of competing apps, top 5 apps, and your app's rank (`--app`, defaults to config `appId`). Saves a snapshot to history. Popularity is cached 24h unless `--fresh`. Terms Apple floors at 5 are re-checked once via recommendations (often returns the real value). |
-| `aso suggest <seed> [--limit 50]` | Keyword ideas: Apple Ads recommendations (with popularity) + App Store autocomplete. |
+| `aso keywords <terms…> [--app <id>] [--min-popularity n] [--max-difficulty n] [--fresh]` | For each term (comma-separated or separate args, max 100): Apple Ads popularity (5–100), difficulty (1–100), `opportunity`, number of competing apps, top 5 apps, and your app's rank (`--app`, defaults to config `appId`). Saves a snapshot to history. Popularity is cached 24h unless `--fresh`. Terms Apple floors at 5 are re-checked once via recommendations (often returns the real value). Filtered terms are listed in `filteredOut` with a reason. |
+| `aso suggest <seed> [--limit 50]` | Keyword ideas: Apple Ads recommendations (with popularity) + App Store autocomplete, in the seed's script. |
 | `aso search <term> [--limit 20]` | Live App Store results for a term: rank, app id, name, subtitle, developer, rating, rating count, release/update dates. |
 | `aso app <appId> [--lang en-US]` | Public listing: name, subtitle, developer, rating, ratings, version, genres, description, supported languages. Saves an app snapshot. |
 
@@ -41,17 +41,22 @@ Key output fields for `aso keywords`:
       "popularityFloor": false,
       "difficulty": 71,
       "opportunity": 17,
+      "confidence": "high",
+      "brand": false,
       "appCount": 200,
       "rank": 34,
       "topApps": [{ "rank": 1, "id": "1083248251", "name": "…", "subtitle": "…", "ratingCount": 208000, "rating": 4.8 }]
     }
   ],
+  "filteredOut": [],
   "warnings": []
 }
 ```
 
 - `popularity` = Apple Search Ads popularity, 5–100. `5` is Apple's floor ("low or unknown"), flagged `popularityFloor: true`.
-- `difficulty` = 1–100 heuristic from the top 5 apps (ratings volume, rating velocity, quality, recency, keyword-in-title/subtitle) and number of competing apps. Higher is harder.
+- `difficulty` = 0–100, higher is harder. The ASOManiac model calibrated against third-party difficulty scores (Pearson r 0.87): competition from the top 10 apps' ratings counts (55%), demand from popularity and autocomplete (10%), market quality from their average rating (35%).
+- `confidence` = `high` (10+ competing apps and real popularity), `medium`, or `low`.
+- `brand` = `true` when the term is another app's brand (all words are in the #1 app's developer name and it clearly owns the term). Don't target these.
 - `opportunity` = `popularity × (100 − difficulty) / 100`, a sort key, not a forecast.
 - `rank` = position in App Store search (top ~10 from the App Store web page, deeper from the iTunes Search API; `null` = not in the top 200).
 
@@ -73,6 +78,24 @@ Key output fields for `aso keywords`:
 
 | Command | What it does |
 | --- | --- |
-| `aso lint --title <t> --subtitle <s> --keywords <k> [--locale en-US]` | Checks lengths (30/30/100), duplicate words across fields, spaces after commas, stop words, plurals, wasted characters, competitor-brand risk list. Returns `pass`, `score`, `issues[]`, `stats`. |
+| `aso lint --title <t> --subtitle <s> --keywords <k> [--locale en-US]` | Checks lengths (title and subtitle 30 characters, keyword field 100 UTF-8 bytes), duplicate words across fields, spaces after commas, stop words, plurals, wasted characters, competitor-brand risk list. Returns `pass`, `score`, `issues[]`, `stats`. |
 | `aso lint --fastlane <metadata dir>` | Same for every locale folder in a fastlane `metadata/` directory (`name.txt`, `subtitle.txt`, `keywords.txt`). |
 | `aso storefronts` | Supported country codes. |
+
+## Errors
+
+Every error has a stable `code`, a `message` and usually a `hint` with the fix.
+
+| Code | Meaning | Fix |
+| --- | --- | --- |
+| `AUTH_REQUIRED` | Not signed in, or the session expired | `aso login` (automatic when the password is in the Keychain) |
+| `NO_APPLE_ADS_ACCOUNT` | The Apple ID has no Apple Ads account | Sign up free at searchads.apple.com (pick United States if your country is missing), then `aso login` |
+| `NO_LINKED_APPS` / `ADS_ORG_NOT_LINKED` | Apple Ads can't see any App Store Connect apps | Apple Ads > account menu > Settings > Link Accounts, then `aso login` |
+| `BAD_CREDENTIALS` | Apple rejected the saved password | `aso setup` to save the right one, or `aso login --manual` |
+| `LOGIN_TIMEOUT` / `BROWSER_CLOSED` | Sign-in didn't finish | `aso login` again (`--timeout 600` for more time) |
+| `NO_BROWSER` | Chrome not found | Install Google Chrome or run `npx playwright install chromium` |
+| `APPLE_ADS_RATE_LIMITED` | Too many popularity requests | Wait a few minutes; popularity is cached for 24h |
+| `NETWORK_ERROR` / `APP_STORE_UNAVAILABLE` | Offline, or Apple isn't answering | Check the connection and retry |
+| `APP_NOT_FOUND` | No app with that id in that country | Use the number after `/id` in the App Store URL, or another `-c` |
+| `BAD_COUNTRY` | Unknown storefront code | `aso storefronts` |
+| `CLI_USAGE_ERROR` / `SQL_ERROR` | Wrong arguments or query | The hint shows the right form |

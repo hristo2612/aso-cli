@@ -11,15 +11,26 @@ let lastRequest = 0;
 export const authRequired = (message = 'Apple Ads sign-in required') =>
   new CliError('AUTH_REQUIRED', message, { hint: 'Run `aso login` (or `aso setup` the first time)', exitCode: 3 });
 
+// The selected Apple Ads org has no App Store Connect account linked, so Apple won't answer.
+export const orgNotLinked = () =>
+  new CliError('ADS_ORG_NOT_LINKED', 'Your Apple Ads account has no App Store Connect account linked to the selected org', {
+    hint: 'Run `aso login` to pick an org with apps. If none has apps, link one: Apple Ads > account menu > Settings > Link Accounts (https://app-ads.apple.com)',
+    exitCode: 3,
+  });
+
+// Popularity requests need the id of any app the Apple Ads org can see; `aso login` discovers one.
 export function requireSession() {
   const session = loadSession();
   if (!session?.cookieHeader) throw authRequired();
-  const appId = loadConfig().appId || session.appId;
-  if (!appId) {
-    throw new CliError('APP_ID_REQUIRED', 'No app configured for Apple Ads requests',
-      { hint: 'Run `aso config appId <your App Store app id>`', exitCode: 2 });
-  }
+  const appId = session.adsAppId || loadConfig().appId;
+  if (!appId) throw authRequired('Apple Ads session has no app to query yet');
   return { ...session, appId };
+}
+
+function retryDelay(res, attempt) {
+  const after = Number(res?.headers?.get?.('retry-after'));
+  if (Number.isFinite(after) && after > 0) return Math.min(after * 1000, 60000);
+  return Math.min(2000 * 2 ** (attempt - 1), 30000) * (0.8 + Math.random() * 0.4);
 }
 
 async function post(path, params, body, session) {
@@ -38,35 +49,33 @@ async function post(path, params, body, session) {
           Origin: 'https://app-ads.apple.com',
           Cookie: session.cookieHeader,
           ...(session.xsrfToken ? { 'X-XSRF-TOKEN': session.xsrfToken } : {}),
-          ...(session.orgId ? { 'X-AP-Context': `orgId=${session.orgId}` } : {}),
         },
         body: JSON.stringify(body),
         signal: AbortSignal.timeout(30000),
       });
     } catch (e) {
       if (attempt < 3) { await new Promise((r) => setTimeout(r, 1500 * attempt)); continue; }
-      throw new CliError('APPLE_ADS_UNAVAILABLE', `Apple Ads request failed: ${e.message}`);
+      throw new CliError('NETWORK_ERROR', `Could not reach Apple Ads (${e.cause?.code || e.message})`, { hint: 'Check your internet connection and retry' });
     }
     const text = await res.text();
     if (process.env.ASO_DEBUG) process.stderr.write(`aso: debug ${path} HTTP ${res.status} ${text.slice(0, 200).replace(/\s+/g, ' ')}\n`);
     let data = null;
     try { data = JSON.parse(text); } catch { /* HTML error page */ }
     // An expired session shows up as 401/403, or as an HTML 503 page instead of JSON.
-    if (res.status === 401 || res.status === 403 || (!data && res.status >= 300)) {
-      if (res.status === 403 && data?.error?.errors?.[0]?.messageCode === 'KWS_NO_ORG_CONTENT_PROVIDERS' && attempt < 3) {
-        await new Promise((r) => setTimeout(r, 2000 * attempt));
-        continue;
-      }
-      throw authRequired('Apple Ads session expired or not authorized');
+    if (data?.error?.errors?.[0]?.messageCode === 'KWS_NO_ORG_CONTENT_PROVIDERS') throw orgNotLinked();
+    if (res.status === 401 || res.status === 403 || (!data && res.status >= 300 && res.status !== 429)) {
+      throw authRequired('Apple Ads session expired, sign in again');
     }
     if (res.status === 429 || res.status >= 500) {
-      if (attempt < 3) { await new Promise((r) => setTimeout(r, 5000 * attempt)); continue; }
-      throw new CliError('APPLE_ADS_RATE_LIMITED', `Apple Ads returned HTTP ${res.status}`, { hint: 'Wait a few minutes and retry' });
+      if (attempt < 4) { await new Promise((r) => setTimeout(r, retryDelay(res, attempt))); continue; }
+      throw new CliError('APPLE_ADS_RATE_LIMITED', `Apple Ads is rate limiting requests (HTTP ${res.status})`, {
+        hint: 'Wait a few minutes and retry; popularity is cached for 24h so re-runs are cheap',
+      });
     }
     if (!res.ok || data?.status !== 'success' || !Array.isArray(data.data)) {
       const msg = data?.error?.errors?.[0]?.message || `HTTP ${res.status}`;
       throw new CliError('APPLE_ADS_ERROR', `Apple Ads error: ${msg}`, {
-        hint: 'Check that your Apple Ads account is linked to App Store Connect and `aso config appId` is an app you own',
+        hint: 'Run `aso login` to refresh the session and re-detect your Apple Ads org and app',
       });
     }
     return data.data;

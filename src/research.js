@@ -2,7 +2,7 @@ import { loadConfig, loadSession } from './config.js';
 import { getPassword } from './keychain.js';
 import { popularity, recommendations, requireSession } from './apple/ads.js';
 import { searchResults, rankOf, hints } from './apple/store.js';
-import { difficulty, opportunity, keywordMatch } from './difficulty.js';
+import { difficulty, opportunity, keywordMatch, confidence, isBrandKeyword } from './difficulty.js';
 import { cachedPopularity, recordKeyword, recordRank, now } from './db.js';
 
 const say = (msg) => process.stderr.write(`aso: ${msg}\n`);
@@ -33,18 +33,18 @@ export async function withAppleAds(fn, { allowLogin = true } = {}) {
   try {
     return await fn(requireSession());
   } catch (e) {
-    if (e.code !== 'AUTH_REQUIRED' || reloggedIn || !allowLogin) throw e;
+    if (!['AUTH_REQUIRED', 'ADS_ORG_NOT_LINKED'].includes(e.code) || reloggedIn || !allowLogin) throw e;
     const config = loadConfig();
     if (!config.autoLogin || !config.appleId || !(await getPassword(config.keychainService, config.appleId))) throw e;
     reloggedIn = true;
-    say('Apple Ads session expired, signing in again');
+    say(e.code === 'AUTH_REQUIRED' ? 'Apple Ads session expired, signing in again' : 'Apple Ads org has no linked apps, re-detecting');
     const { login } = await import('./login.js');
     await login({ timeoutSec: 240 });
     return fn(requireSession());
   }
 }
 
-export async function analyzeKeywords(terms, { country, appId, fresh = false, allowLogin = true, record = true } = {}) {
+export async function analyzeKeywords(terms, { country, appId, fresh = false, allowLogin = true, record = true, minPopularity = null, maxDifficulty = null } = {}) {
   const warnings = [];
   const pops = new Map();
   const needed = fresh ? terms : terms.filter((t) => {
@@ -75,16 +75,29 @@ export async function analyzeKeywords(terms, { country, appId, fresh = false, al
   }
 
   const observedAt = now();
-  const items = await mapLimit(terms, 4, async (keyword) => {
+  const filteredOut = [];
+  const kept = terms.filter((t) => {
+    const pop = pops.get(t);
+    if (minPopularity != null && pop != null && pop < minPopularity) {
+      filteredOut.push({ keyword: t, reason: 'below_min_popularity', popularity: pop });
+      return false;
+    }
+    return true;
+  });
+  const analyzed = await mapLimit(kept, 4, async (keyword) => {
     let results;
+    let hintCount = 0;
     try {
-      results = await searchResults(keyword, country);
+      [results, hintCount] = await Promise.all([
+        searchResults(keyword, country),
+        hints(keyword, country).then((h) => h.length, () => 0),
+      ]);
     } catch (e) {
-      warnings.push(`${keyword}: search failed (${e.message})`);
+      warnings.push(`${keyword}: App Store search failed (${e.message})`);
       results = null;
     }
     const pop = pops.get(keyword) ?? null;
-    const diff = results ? difficulty(keyword, results.apps, results.appCount) : null;
+    const diff = results ? difficulty(results.apps, { popularity: pop, hintCount }) : null;
     const rank = results && appId ? rankOf(results, appId) : null;
     const topApps = (results?.apps ?? []).slice(0, 5).map((a) => ({
       rank: a.rank, id: a.id, name: a.name, subtitle: a.subtitle, developer: a.developer,
@@ -100,12 +113,21 @@ export async function analyzeKeywords(terms, { country, appId, fresh = false, al
       popularityFloor: pop === 5,
       difficulty: diff,
       opportunity: opportunity(pop, diff),
+      confidence: results ? confidence(results.appCount, pop) : 'low',
+      brand: results ? isBrandKeyword(keyword, results.apps) : false,
       appCount: results?.appCount ?? null,
       ...(appId ? { rank } : {}),
       topApps,
     };
   });
-  return { country, appId: appId ? String(appId) : null, observedAt, items, warnings };
+  const items = analyzed.filter((i) => {
+    if (maxDifficulty != null && i.difficulty != null && i.difficulty > maxDifficulty) {
+      filteredOut.push({ keyword: i.keyword, reason: 'above_max_difficulty', difficulty: i.difficulty });
+      return false;
+    }
+    return true;
+  });
+  return { country, appId: appId ? String(appId) : null, observedAt, items, filteredOut, warnings };
 }
 
 export async function suggest(seed, { country, limit = 50, allowLogin = true } = {}) {
@@ -130,7 +152,10 @@ export async function suggest(seed, { country, limit = 50, allowLogin = true } =
     if (byKeyword.has(k)) byKeyword.get(k).sources.push('autocomplete');
     else byKeyword.set(k, { keyword: k, popularity: null, sources: ['autocomplete'] });
   }
-  const items = [...byKeyword.values()]
+  // Apple mixes in terms from other languages; keep the seed's script (Latin seed -> Latin results).
+  const latin = (t) => !/[^\p{Script=Latin}\p{N}\p{P}\p{Zs}]/u.test(t);
+  const sameScript = latin(seed) ? latin : () => true;
+  const items = [...byKeyword.values()].filter((i) => sameScript(i.keyword))
     .sort((a, b) => (b.popularity ?? -1) - (a.popularity ?? -1))
     .slice(0, limit);
   return { seed, country, items, warnings };

@@ -25,9 +25,12 @@ export function lintMetadata({ title = '', subtitle = '', keywords = '', locale 
   const add = (severity, rule, message, field) => issues.push({ severity, rule, field, message });
   const english = /^en/i.test(locale);
 
+  // Title and subtitle are limited in characters; the keyword field in UTF-8 bytes
+  // (CJK and Arabic take 2-3 bytes per character).
+  const size = (field, v) => (field === 'keywords' ? Buffer.byteLength(v, 'utf8') : [...v].length);
   for (const [field, value] of Object.entries({ title, subtitle, keywords })) {
-    if ([...value].length > LIMITS[field]) {
-      add('error', 'max-length', `${field} is ${[...value].length}/${LIMITS[field]} characters`, field);
+    if (size(field, value) > LIMITS[field]) {
+      add('error', 'max-length', `${field} is ${size(field, value)}/${LIMITS[field]} ${field === 'keywords' ? 'bytes' : 'characters'}`, field);
     }
   }
   if (!title.trim()) add('error', 'required', 'title is empty', 'title');
@@ -86,8 +89,8 @@ export function lintMetadata({ title = '', subtitle = '', keywords = '', locale 
   }
 
   const len = (s) => [...s].length;
-  const unused = LIMITS.keywords - len(keywords);
-  if (keywords && unused >= 10) add('warning', 'utilization', `keyword field has ${unused} unused characters`, 'keywords');
+  const unused = LIMITS.keywords - Buffer.byteLength(keywords, 'utf8');
+  if (keywords && unused >= 10) add('warning', 'utilization', `keyword field has ${unused} unused bytes`, 'keywords');
   if (!keywords) add('warning', 'utilization', 'keyword field is empty', 'keywords');
   if (subtitle === '') add('warning', 'utilization', 'subtitle is empty (30 indexed characters unused)', 'subtitle');
 
@@ -102,7 +105,7 @@ export function lintMetadata({ title = '', subtitle = '', keywords = '', locale 
     stats: {
       title: `${len(title)}/${LIMITS.title}`,
       subtitle: `${len(subtitle)}/${LIMITS.subtitle}`,
-      keywords: `${len(keywords)}/${LIMITS.keywords}`,
+      keywords: `${Buffer.byteLength(keywords, 'utf8')}/${LIMITS.keywords} bytes`,
       uniqueWords: unique.size,
       words: [...unique].sort(),
     },
