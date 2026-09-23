@@ -2,6 +2,12 @@
 
 Free, local App Store Optimization for you and your AI agent.
 
+```bash
+npm i -g aso-kit && aso setup
+```
+
+[![npm](https://img.shields.io/npm/v/aso-kit)](https://www.npmjs.com/package/aso-kit) [![CI](https://github.com/hristo2612/aso-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/hristo2612/aso-cli/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
 - **Keyword research**: Apple Search Ads popularity, difficulty, opportunity, top competitors, and your rank, in one command.
 - **Ideas**: Apple Ads keyword recommendations plus App Store autocomplete.
 - **History**: every lookup lands in a local SQLite file (`~/.aso/aso.db`). Track ranks daily and see what moved.
@@ -13,16 +19,20 @@ No account, no server, no telemetry. MIT.
 
 ## Install
 
+Needs Node.js 22.13+.
+
 ```bash
-curl -fsSL https://raw.githubusercontent.com/hristo2612/aso-cli/main/install.sh | bash
+npm i -g aso-kit                    # installs the `aso` command
+npx skills add hristo2612/aso-cli   # optional: the agent skills
+aso setup                           # Apple ID → Keychain, your app, sign in
 ```
 
-Or step by step (Node.js 22.13+):
+Just want to try it? `npx aso-kit search "habit tracker"` runs without installing anything.
+
+Prefer one line that does all of the above, including a Node check?
 
 ```bash
-npm i -g @hristo2612/aso-cli                    # the `aso` command
-npx skills add hristo2612/aso-cli  # optional: agent skills
-aso setup                          # Apple ID → Keychain, your app, sign in
+curl -fsSL https://raw.githubusercontent.com/hristo2612/aso-cli/main/install.sh | bash
 ```
 
 ## Quick start

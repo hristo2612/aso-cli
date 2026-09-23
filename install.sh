@@ -12,7 +12,7 @@ command -v node >/dev/null 2>&1 || need_node
 node -e 'const [a,b]=process.versions.node.split(".").map(Number); process.exit(a>22||(a===22&&b>=13)?0:1)' || need_node
 
 echo "→ installing the aso CLI"
-npm install -g "@hristo2612/aso-cli" 2>/dev/null || npm install -g "github:${REPO}"
+npm install -g "aso-kit" 2>/dev/null || npm install -g "github:${REPO}"
 
 if [ -t 0 ] || [ -r /dev/tty ]; then
   printf "→ also install the ASO agent skills (Claude Code, Codex, Cursor…)? [Y/n] "

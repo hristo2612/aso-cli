@@ -5,7 +5,7 @@ description: Entry point for App Store Optimization (ASO) work on an iOS/macOS a
 
 # ASO Router
 
-Entry point for all ASO work with the `aso` CLI (`@hristo2612/aso-cli` on npm). Do preflight, know the core facts, then route.
+Entry point for all ASO work with the `aso` CLI (`aso-kit` on npm). Do preflight, know the core facts, then route.
 
 ## Preflight
 
@@ -15,7 +15,7 @@ Run once per session before any other `aso` command:
 aso status
 ```
 
-- If `aso: command not found`: install it with `npm i -g @hristo2612/aso-cli` (needs Node.js 22.13+), or `curl -fsSL https://raw.githubusercontent.com/hristo2612/aso-cli/main/install.sh | bash`.
+- If `aso: command not found`: install it with `npm i -g aso-kit` (needs Node.js 22.13+), or `curl -fsSL https://raw.githubusercontent.com/hristo2612/aso-cli/main/install.sh | bash`.
 - If `aso status` shows no active session: run `aso setup` (interactive first-run, Apple ID, app, default country, then triggers login) or `aso login` if already configured. Both open Chrome and handle 2FA/Keychain in the user's own terminal.
 - **Never ask the user for their Apple ID password in chat.** Credentials go in macOS Keychain via `aso setup`/`aso login`, run directly by the user in their terminal. If a command needs interactive auth, tell the user to run it themselves and report back.
 - Everything except `popularity` works without a session (search, ranks, difficulty, app lookup, lint). If there's no session and the user only needs those, proceed: `popularity` will just come back `null`.

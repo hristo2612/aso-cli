@@ -16,7 +16,7 @@ async function launch(headless) {
   try {
     ({ chromium } = await import('playwright-core'));
   } catch {
-    throw new CliError('NO_PLAYWRIGHT', 'playwright-core is not installed', { hint: 'Reinstall: npm i -g @hristo2612/aso-cli' });
+    throw new CliError('NO_PLAYWRIGHT', 'playwright-core is not installed', { hint: 'Reinstall: npm i -g aso-kit' });
   }
   ensureHome();
   const opts = { headless, viewport: { width: 1200, height: 820 } };
