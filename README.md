@@ -18,7 +18,7 @@
 <p align="center">
   <a href="https://github.com/hristo2612/aso-cli/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/hristo2612/aso-cli/ci.yml?branch=main&style=for-the-badge&label=ci&labelColor=555" alt="CI"></a>
   <img src="https://img.shields.io/badge/node-22.13%2B-339933?style=for-the-badge&labelColor=555" alt="Node 22.13+">
-  <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux-111?style=for-the-badge&labelColor=555" alt="Platform">
+  <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux-6e7781?style=for-the-badge&labelColor=555" alt="Platform">
 </p>
 
 **Free App Store Optimization for you and your AI agent.** Real Apple Search Ads popularity, keyword difficulty, live App Store ranks, and a local history of all of it. Your agent signs in to Apple on its own (Keychain plus automatic 2FA), so it can research keywords, write metadata and track rankings while you build your app.
