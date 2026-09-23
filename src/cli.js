@@ -348,9 +348,9 @@ async function cmdTrack(args, opts) {
         results.push(r);
       }
     }
-    const summary = results.flatMap((r) => r.items.map((i) => ({ appId: r.appId, platform: r.platform, country: r.country, keyword: i.keyword, rank: i.rank, popularity: i.popularity, difficulty: i.difficulty })));
+    const summary = results.flatMap((r) => r.items.map((i) => ({ appId: r.appId, platform: r.platform, country: r.country, keyword: i.keyword, rank: i.rank, rankStatus: i.rankStatus, popularity: i.popularity, difficulty: i.difficulty })));
     return print({ checked: summary.length, items: summary, warnings: [...new Set(results.flatMap((r) => r.warnings))] },
-      (o) => (o.items.length ? table(o.items, [['appId', 'app', 11], ['country', 'cc', 2], ['keyword', 'keyword', 36], [(i) => i.rank ?? '>250', 'rank', 5], ['popularity', 'pop', 4], ['difficulty', 'diff', 4]]) : 'nothing tracked, add with `aso track add <appId> "k1,k2"`'));
+      (o) => (o.items.length ? table(o.items, [['appId', 'app', 11], ['country', 'cc', 2], ['keyword', 'keyword', 36], [(i) => i.rank ?? (i.rankStatus === 'unknown' ? '?' : '>250'), 'rank', 5], ['popularity', 'pop', 4], ['difficulty', 'diff', 4]]) : 'nothing tracked, add with `aso track add <appId> "k1,k2"`'));
   }
   throw usage('aso track add|rm|list|run');
 }
