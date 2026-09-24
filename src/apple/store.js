@@ -7,7 +7,7 @@ const MAX_RESULTS = 250;
 
 // Apple throttles bursts per host (the search endpoints first), so requests to each host are spaced
 // out. A 403 or 429 from these hosts means "slow down": back off and retry instead of failing.
-const HOST_INTERVAL_MS = { 'itunes.apple.com': 3000, 'store-search': 1500, 'search.itunes.apple.com': 600, 'apps.apple.com': 500 };
+const HOST_INTERVAL_MS = { 'itunes.apple.com': 3000, 'store-search': 4000, 'search.itunes.apple.com': 600, 'apps.apple.com': 500 };
 const nextSlot = new Map();
 async function pace(host) {
   const gap = HOST_INTERVAL_MS[host] ?? 300;
@@ -18,7 +18,7 @@ async function pace(host) {
 
 const THROTTLE_BACKOFF_MS = [10000, 30000, 60000];
 
-async function get(url, { headers = {}, json = false, attempts = 3 } = {}) {
+async function get(url, { headers = {}, json = false, attempts = 3, throttleRetries = THROTTLE_BACKOFF_MS.length } = {}) {
   const { hostname: host, pathname } = new URL(url);
   const lane = pathname.includes('MZStore.woa') ? 'store-search' : host;
   let lastError;
@@ -31,7 +31,7 @@ async function get(url, { headers = {}, json = false, attempts = 3 } = {}) {
       if (res.ok) return json ? res.json() : res.text();
       lastError = new Error(`HTTP ${res.status}`);
       if (res.status === 403 || res.status === 429) {
-        if (throttled >= THROTTLE_BACKOFF_MS.length) break;
+        if (throttled >= throttleRetries) break;
         await new Promise((r) => setTimeout(r, THROTTLE_BACKOFF_MS[throttled++]));
         continue;
       }
@@ -140,12 +140,27 @@ export async function lookup(ids, country) {
 
 // Apple's own ordered search results (the endpoint the App Store apps use): up to ~250 app ids in
 // true App Store order, with full details for the first few.
+// When Apple blocks store search (it does after bursts, sometimes for hours), stop asking for a while
+// instead of paying a backoff on every keyword.
+const STORE_SEARCH_COOLDOWN_MS = 15 * 60 * 1000;
+let storeSearchBlockedUntil = 0;
+
 export async function storeSearch(term, country) {
   const { id } = sf(country);
-  const data = await get(
-    `https://search.itunes.apple.com/WebObjects/MZStore.woa/wa/search?clientApplication=Software&media=software&term=${encodeURIComponent(term)}`,
-    { json: true, headers: { 'User-Agent': 'AppStore/3.0 iOS/18.0 model/iPhone16,1', 'X-Apple-Store-Front': `${id}-1,29`, Accept: 'application/json' } }
-  );
+  if (Date.now() < storeSearchBlockedUntil) return null;
+  let data;
+  try {
+    data = await get(
+      `https://search.itunes.apple.com/WebObjects/MZStore.woa/wa/search?clientApplication=Software&media=software&term=${encodeURIComponent(term)}`,
+      { json: true, throttleRetries: 1, headers: { 'User-Agent': 'AppStore/3.0 iOS/18.0 model/iPhone16,1', 'X-Apple-Store-Front': `${id}-1,29`, Accept: 'application/json' } }
+    );
+  } catch (e) {
+    if (e.code === 'APP_STORE_THROTTLED' && Date.now() >= storeSearchBlockedUntil) {
+      storeSearchBlockedUntil = Date.now() + STORE_SEARCH_COOLDOWN_MS;
+      process.stderr.write('aso: Apple is blocking App Store search for now; ranks beyond the top ~11 are unknown until it lifts\n');
+    }
+    throw e;
+  }
   const bubble = data?.pageData?.bubbles?.find((b) => b.name === 'software');
   if (!bubble) return null;
   const details = new Map();
@@ -176,17 +191,25 @@ export async function searchResults(term, country, { limit = MAX_RESULTS, platfo
   if (store?.ids.length) {
     order = store.ids;
     source = 'app-store';
+  } else if (!mac) {
+    // Without Apple's store search only the web page's top ~11 are in true order. The iTunes Search API
+    // orders results differently, so it is not used for iPhone ranks.
+    if (!top.length) throw new CliError('APP_STORE_THROTTLED', 'The App Store search is unavailable right now', {
+      hint: 'Apple limits bursts of searches; wait 15-30 minutes and retry' });
+    order = top.map((a) => a.id);
+    complete = false;
+    source = `app-store-web-top-${top.length}`;
   } else {
     let deep = [];
     try {
       deep = await itunesSearch(term, country, MAX_RESULTS, platform);
     } catch (e) {
       if (!top.length) throw e;
-      complete = false; // only the web page's top ~11 are known
+      complete = false; // only the Mac web page's top ~12 are known
     }
     for (const a of deep) byId.set(a.id, a);
     order = [...new Set([...top.map((a) => a.id), ...deep.map((a) => a.id)])];
-    source = complete ? (mac ? 'mac-app-store-web+itunes-mac' : 'app-store-web+itunes-search') : `${mac ? 'mac-' : ''}app-store-web-top-${top.length}`;
+    source = complete ? 'mac-app-store-web+itunes-mac' : `mac-app-store-web-top-${top.length}`;
   }
   const known = (id) => byId.has(id) || store?.details.get(id)?.ratingCount != null || top.find((a) => a.id === id)?.ratingCount != null;
   const wanted = order.slice(0, Math.min(limit, 10)).filter((id) => !known(id));
