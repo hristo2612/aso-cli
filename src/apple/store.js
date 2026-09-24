@@ -1,6 +1,6 @@
 // Public App Store data (no login needed): search order, app details, autocomplete.
 import { CliError } from '../config.js';
-import { storefront } from '../storefronts.js';
+import { storefront, languageId } from '../storefronts.js';
 
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15';
 const MAX_RESULTS = 250;
@@ -148,13 +148,13 @@ const STORE_SEARCH_COOLDOWN_MS = 15 * 60 * 1000;
 let storeSearchBlockedUntil = 0;
 
 export async function storeSearch(term, country) {
-  const { id } = sf(country);
+  const { id, code } = sf(country);
   if (Date.now() < storeSearchBlockedUntil) return null;
   let data;
   try {
     data = await get(
       `https://search.itunes.apple.com/WebObjects/MZStore.woa/wa/search?clientApplication=Software&media=software&term=${encodeURIComponent(term)}`,
-      { json: true, throttleRetries: 1, headers: { 'User-Agent': 'AppStore/3.0 iOS/18.0 model/iPhone16,1', 'X-Apple-Store-Front': `${id}-1,29`, Accept: 'application/json' } }
+      { json: true, throttleRetries: 1, headers: { 'User-Agent': 'AppStore/3.0 iOS/18.0 model/iPhone16,1', 'X-Apple-Store-Front': `${id}-${languageId(code)},29`, Accept: 'application/json' } }
     );
   } catch (e) {
     if (e.code === 'APP_STORE_THROTTLED' && Date.now() >= storeSearchBlockedUntil) {
@@ -163,6 +163,9 @@ export async function storeSearch(term, country) {
     }
     throw e;
   }
+  // Apple falls back to the US store on a header it doesn't like; never pass that off as this country.
+  const served = data?.storePlatformData?.['native-search-lockup']?.meta?.storefront?.cc;
+  if (served && served.toUpperCase() !== code) return null;
   const bubble = data?.pageData?.bubbles?.find((b) => b.name === 'software');
   if (!bubble) return null;
   const details = new Map();

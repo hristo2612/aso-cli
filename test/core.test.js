@@ -102,6 +102,12 @@ test('parseTerms splits, trims, lowercases and dedupes', () => {
   assert.deepEqual(parseTerms(['White Noise, sleep  sounds', 'white noise', 'fan']), ['white noise', 'sleep sounds', 'fan']);
 });
 
+test('store search language ids', async () => {
+  const { languageId } = await import('../src/storefronts.js');
+  assert.equal(languageId('ca'), 6);
+  assert.equal(languageId('NZ'), 2);
+});
+
 test('storefront lookup', () => {
   assert.equal(storefront('de').id, 143443);
   assert.equal(storefront('ee').ads, false);

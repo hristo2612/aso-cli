@@ -20,6 +20,11 @@ export const STOREFRONTS = {
   LV: ['Latvia', 143519, false], EE: ['Estonia', 143518, false],
 };
 
+// Apple's store search needs a language id that the storefront accepts (checked 2026-09-24). Every
+// storefront tested also accepts 2 (en-GB), used when the native id isn't known yet.
+const LANGUAGE_IDS = { US: 1, GB: 2, FR: 3, DE: 4, CA: 6, JP: 9, KR: 13, CN: 19, AU: 27 };
+export const languageId = (code) => LANGUAGE_IDS[String(code).toUpperCase()] ?? 2;
+
 export function storefront(code) {
   const cc = String(code || '').toUpperCase();
   const entry = STOREFRONTS[cc];
