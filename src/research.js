@@ -104,7 +104,9 @@ export async function analyzeKeywords(terms, { country, appId, platform = 'iphon
       results = null;
     }
     const pop = pops.get(keyword) ?? null;
-    const diff = results && results.apps.length >= 3 ? difficulty(results.apps, { popularity: pop, hintCount }) : null;
+    const diff = !results ? null
+      : results.complete && results.appCount === 0 ? 0 // nothing to compete with
+        : results.apps.length >= 3 ? difficulty(results.apps, { popularity: pop, hintCount }) : null;
     const rank = results && appId ? rankOf(results, appId) : null;
     // 'unknown' when the search failed or only a partial list came back and the app wasn't in it.
     const rankStatus = !appId ? undefined : rank != null ? 'ranked' : results?.complete ? 'not_in_results' : 'unknown';

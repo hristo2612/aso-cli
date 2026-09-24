@@ -166,8 +166,10 @@ export async function storeSearch(term, country) {
   // Apple falls back to the US store on a header it doesn't like; never pass that off as this country.
   const served = data?.storePlatformData?.['native-search-lockup']?.meta?.storefront?.cc;
   if (served && served.toUpperCase() !== code) return null;
-  const bubble = data?.pageData?.bubbles?.find((b) => b.name === 'software');
-  if (!bubble) return null;
+  const bubbles = data?.pageData?.bubbles;
+  if (!Array.isArray(bubbles)) return null;
+  const bubble = bubbles.find((b) => b.name === 'software');
+  if (!bubble) return { ids: [], details: new Map() }; // a valid answer with no matching apps
   const details = new Map();
   for (const r of Object.values(data?.storePlatformData?.['native-search-lockup']?.results ?? {})) {
     details.set(String(r.id), {
@@ -193,7 +195,7 @@ export async function searchResults(term, country, { limit = MAX_RESULTS, platfo
   let source;
   let complete = true;
   const byId = new Map();
-  if (store?.ids.length) {
+  if (store) {
     order = store.ids;
     source = 'app-store';
   } else if (!mac) {
