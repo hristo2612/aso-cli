@@ -26,7 +26,9 @@ async function get(url, { headers = {}, json = false, attempts = 3, throttleRetr
   for (let i = 1; i <= attempts + throttled; i++) {
     await pace(lane);
     try {
+      const t0 = Date.now();
       const res = await fetch(url, { headers: { 'User-Agent': UA, ...headers }, signal: AbortSignal.timeout(20000) });
+      if (process.env.ASO_DEBUG) process.stderr.write(`aso: debug ${lane} HTTP ${res.status} ${Date.now() - t0}ms\n`);
       if (res.status === 404) return null;
       if (res.ok) return json ? res.json() : res.text();
       lastError = new Error(`HTTP ${res.status}`);
