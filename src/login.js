@@ -106,6 +106,14 @@ function sessionFrom(cookies) {
   return { cookieHeader: ok.map((c) => `${c.name}=${c.value}`).join('; '), xsrfToken: xsrf };
 }
 
+// Apple Ads can return an empty result from its legacy global app-list endpoint
+// even when a configured app is available in the campaign chooser. The later
+// popularity request remains the authorization check before a session is saved.
+export function appsForProbe(apps, appId) {
+  if (apps.length || !appId) return apps;
+  return [{ id: String(appId), name: `App ${appId}` }];
+}
+
 // Lists the Apple Ads orgs this Apple ID can use and the App Store apps linked to them.
 async function discover(page) {
   return page.evaluate(async () => {
@@ -150,6 +158,7 @@ async function connect(context, page, config) {
       exitCode: 3,
     });
   }
+  found.apps = appsForProbe(found.apps, config.appId);
   if (!found.apps.length) {
     throw new CliError('NO_LINKED_APPS', 'Your Apple Ads account has no App Store Connect apps linked', {
       hint: 'In Apple Ads open account menu > Settings > Link Accounts, link your App Store Connect account, then run `aso login`',
