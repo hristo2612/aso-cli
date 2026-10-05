@@ -7,6 +7,7 @@ import { storefront } from '../src/storefronts.js';
 
 process.env.ASO_HOME = '/tmp/aso-unit-test';
 const { parseTerms } = await import('../src/research.js');
+const { appsForProbe } = await import('../src/login.js');
 
 test('normalizeText strips accents and punctuation', () => {
   assert.equal(normalizeText('Café: Sleep-Sounds!'), 'cafe sleep sounds');
@@ -100,6 +101,13 @@ test('serializedData reads embedded App Store JSON', () => {
 
 test('parseTerms splits, trims, lowercases and dedupes', () => {
   assert.deepEqual(parseTerms(['White Noise, sleep  sounds', 'white noise', 'fan']), ['white noise', 'sleep sounds', 'fan']);
+});
+
+test('configured app is used as a popularity probe when Apple Ads discovery is empty', () => {
+  assert.deepEqual(appsForProbe([], '6759579990'), [{ id: '6759579990', name: 'App 6759579990' }]);
+  const discovered = [{ id: '1', name: 'Existing App' }];
+  assert.equal(appsForProbe(discovered, '6759579990'), discovered);
+  assert.deepEqual(appsForProbe([], null), []);
 });
 
 test('store search language ids', async () => {
